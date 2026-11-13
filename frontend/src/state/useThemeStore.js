@@ -4,17 +4,17 @@ import { persist } from "zustand/middleware";
 // Font presets for chat
 export const FONT_PRESETS = [
   {
-    id: "default",
-    name: "Default",
-    family: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    preview: "Inter",
-  },
-  {
     id: "system",
     name: "System",
     family:
       'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     preview: "System",
+  },
+  {
+    id: "default",
+    name: "Inter",
+    family: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    preview: "Inter",
   },
   {
     id: "serif",
@@ -146,7 +146,7 @@ export const useThemeStore = create(
       // Loading state
       isLoading: false,
       // Font settings
-      chatFont: "default",
+      chatFont: "system",
       chatFontSize: "medium",
       // Code blocks
       showCodeLineNumbers: false,

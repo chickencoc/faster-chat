@@ -10,6 +10,11 @@ import { ensureSession } from "../middleware/auth.js";
 
 export const authRouter = new Hono();
 
+authRouter.use("*", async (c, next) => {
+  c.header("Cache-Control", "no-store");
+  await next();
+});
+
 // Validation schemas
 const EmailSchema = z.string().trim().max(254).email("Enter a valid email address");
 
@@ -39,9 +44,15 @@ const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax",
-  maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
   path: "/",
 };
+
+function setSessionCookie(c, sessionId, expiresAt) {
+  setCookie(c, COOKIE_NAME, sessionId, {
+    ...COOKIE_OPTIONS,
+    expires: new Date(expiresAt),
+  });
+}
 
 authRouter.post("/register", async (c) => {
   const ip = getClientIP(c);
@@ -112,7 +123,7 @@ authRouter.post("/register", async (c) => {
   const { sessionId, expiresAt } = dbUtils.createSession(userId);
 
   // Set cookie
-  setCookie(c, COOKIE_NAME, sessionId, COOKIE_OPTIONS);
+  setSessionCookie(c, sessionId, expiresAt);
 
   return c.json(
     {
@@ -179,7 +190,7 @@ authRouter.post("/login", async (c) => {
   const { sessionId, expiresAt } = dbUtils.createSession(user.id);
 
   // Set cookie
-  setCookie(c, COOKIE_NAME, sessionId, COOKIE_OPTIONS);
+  setSessionCookie(c, sessionId, expiresAt);
 
   return c.json({
     user: {
@@ -285,7 +296,7 @@ authRouter.put("/change-password", ensureSession, async (c) => {
   // Invalidate all sessions then re-create current one
   dbUtils.deleteUserSessions(user.id);
   const { sessionId, expiresAt } = dbUtils.createSession(user.id);
-  setCookie(c, COOKIE_NAME, sessionId, COOKIE_OPTIONS);
+  setSessionCookie(c, sessionId, expiresAt);
 
   dbUtils.createAuditLog(
     user.id,

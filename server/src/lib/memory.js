@@ -14,12 +14,7 @@ export function formatMemoryContext(memories) {
   return MEMORY_CONTEXT_TEMPLATE.replace("{memories}", bullets);
 }
 
-export function isMemoryEnabledForRequest({
-  dbUtils,
-  userId,
-  chatId = null,
-  requestEnabled = true,
-}) {
+export function isMemoryEnabledForRequest({ dbUtils, userId, requestEnabled = true }) {
   if (!requestEnabled || !userId) {
     return false;
   }
@@ -29,9 +24,6 @@ export function isMemoryEnabledForRequest({
   if (!dbUtils.getUserMemoryEnabled(userId)) {
     return false;
   }
-  if (chatId && dbUtils.getChatMemoryDisabled(chatId)) {
-    return false;
-  }
   return true;
 }
 
@@ -39,9 +31,8 @@ export function createMemoryMiddleware(dbUtils) {
   return {
     transformParams: async ({ params }) => {
       const userId = params.providerOptions?.memory?.userId;
-      const chatId = params.providerOptions?.memory?.chatId;
       const requestEnabled = params.providerOptions?.memory?.enabled !== false;
-      if (!isMemoryEnabledForRequest({ dbUtils, userId, chatId, requestEnabled })) {
+      if (!isMemoryEnabledForRequest({ dbUtils, userId, requestEnabled })) {
         return params;
       }
 

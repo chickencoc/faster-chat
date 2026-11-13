@@ -27,6 +27,8 @@ describe("auth routes", () => {
 
       const setCookie = res.headers.get("set-cookie");
       expect(setCookie).toContain("session=");
+      expect(setCookie).toContain(`Expires=${new Date(data.session.expiresAt).toUTCString()}`);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
     });
 
     test("second registration returns 403", async () => {
@@ -118,6 +120,7 @@ describe("auth routes", () => {
     test("no cookie returns 401", async () => {
       const res = await makeRequest(app, "GET", "/api/auth/session");
       expect(res.status).toBe(401);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
     });
 
     test("invalid cookie returns 401", async () => {

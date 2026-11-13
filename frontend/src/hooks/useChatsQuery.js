@@ -29,6 +29,8 @@ export function useChatQuery(chatId) {
     queryKey: chatKeys.detail(userId, chatId),
     queryFn: () => chatsClient.getChat(chatId),
     enabled: userId !== null && !!chatId && !isDraft,
+    staleTime: 0,
+    refetchInterval: (entry) => (entry.state.data?.generationId ? 1500 : false),
   });
   return isDraft ? { ...query, data: draft, isLoading: false, isError: false } : query;
 }
@@ -42,6 +44,7 @@ export function useMessagesQuery(chatId) {
     queryFn: () => chatsClient.getMessages(chatId),
     select: (messages) => messages.map(toCanonicalMessage),
     enabled: userId !== null && !!chatId && !isDraft,
+    staleTime: 0,
   });
   return isDraft ? { ...query, data: query.data ?? [], isLoading: false, isError: false } : query;
 }
@@ -211,23 +214,6 @@ export function useCreateMessageMutation() {
       // Refetch to ensure consistency with server
       queryClient.invalidateQueries({ queryKey: chatKeys.messages(userId, chatId) });
       queryClient.invalidateQueries({ queryKey: chatKeys.list(userId) });
-    },
-  });
-}
-
-export function useDeleteMessageMutation() {
-  const queryClient = useQueryClient();
-  const userId = useAuthState((state) => state.user?.id ?? null);
-
-  return useMutation({
-    mutationFn: ({ chatId, messageId }) => chatsClient.deleteMessage(chatId, messageId),
-    onSuccess: (_, { chatId, messageId }) => {
-      queryClient.setQueryData(chatKeys.messages(userId, chatId), (old) => {
-        if (!old) {
-          return old;
-        }
-        return old.filter((msg) => msg.id !== messageId);
-      });
     },
   });
 }

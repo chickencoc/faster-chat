@@ -2,7 +2,7 @@ import { useChatQuery, useMessagesQuery, useCreateMessageMutation } from "./useC
 
 export function useChatPersistence(chatId) {
   const { data: chat, isLoading: isChatLoading, isError: isChatError } = useChatQuery(chatId);
-  const { data: messages } = useMessagesQuery(chatId);
+  const { data: messages, refetch: refreshMessages } = useMessagesQuery(chatId);
   const createMessageMutation = useCreateMessageMutation();
 
   async function saveUserMessage(
@@ -21,25 +21,6 @@ export function useChatPersistence(chatId) {
     return createMessageMutation.mutateAsync({ chatId: currentChatId, message });
   }
 
-  async function saveAssistantMessage(
-    { id, content, model = null, metadata = null, fileIds = [], createdAt },
-    currentChatId
-  ) {
-    const message = {
-      id,
-      role: "assistant",
-      content,
-      fileIds,
-      model,
-      createdAt,
-    };
-    if (metadata) {
-      message.metadata = metadata;
-    }
-
-    return createMessageMutation.mutateAsync({ chatId: currentChatId, message });
-  }
-
   return {
     chat,
     messages: messages ?? [],
@@ -47,6 +28,6 @@ export function useChatPersistence(chatId) {
     isChatError,
     isSaving: createMessageMutation.isPending,
     saveUserMessage,
-    saveAssistantMessage,
+    refreshMessages,
   };
 }

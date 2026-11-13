@@ -75,7 +75,7 @@ const ChatContextMenu = ({
     },
     {
       icon: FolderInput,
-      label: "Move to Folder",
+      label: "Move to Project",
       onClick: () => {
         onMoveToFolder(chat);
         onClose();

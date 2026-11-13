@@ -9,11 +9,11 @@ import { useChatActions } from "@/hooks/useChatActions";
 import { useFolders } from "@/hooks/useFolders";
 import { searchWithHighlights } from "@/lib/search";
 import { toast } from "sonner";
-import { LOGO_ICON_NAMES, UI_CONSTANTS, FOLDER_CONSTANTS } from "@faster-chat/shared";
-import * as LucideIcons from "lucide-preact";
+import { UI_CONSTANTS, FOLDER_CONSTANTS } from "@faster-chat/shared";
 import {
   ChevronDown,
   ChevronRight,
+  CircleDashed,
   Folder,
   FolderPlus,
   PanelLeftClose,
@@ -22,19 +22,12 @@ import {
   SquarePen,
   Trash2,
   X,
-  Zap,
 } from "lucide-preact";
 import Modal from "@/components/ui/Modal";
 import ChatContextMenu from "./ChatContextMenu";
 import MoveToFolderModal from "./MoveToFolderModal";
 
 const CHAT_ITEM_HEIGHT = 44; // Height of each chat item in pixels
-
-// Build icon map from shared names
-const LOGO_ICONS = LOGO_ICON_NAMES.reduce((acc, name) => {
-  acc[name] = LucideIcons[name];
-  return acc;
-}, {});
 
 const DATE_HEADER_HEIGHT = 32;
 
@@ -240,7 +233,7 @@ const NewFolderInput = ({ onCreate, onCancel, isCreating }) => {
             onCancel();
           }
         }}
-        placeholder="Folder name..."
+        placeholder="Project name..."
         autoFocus
         disabled={isCreating}
         maxLength={FOLDER_CONSTANTS.MAX_NAME_LENGTH}
@@ -395,8 +388,6 @@ const Sidebar = () => {
   const toggleSidebarCollapse = useUiState((state) => state.toggleSidebarCollapse);
   const { data: settings } = useAppSettingsQuery();
   const appName = settings?.appName;
-  const logoIcon = settings?.logoIcon;
-  const LogoIcon = LOGO_ICONS[logoIcon] || Zap;
   const isUtilityRoute = pathname === "/admin" || pathname === "/settings";
   const forceExpanded = isUtilityRoute && !isMobile;
   const effectiveCollapsed = forceExpanded ? false : sidebarCollapsed;
@@ -465,10 +456,10 @@ const Sidebar = () => {
     try {
       const result = await createFolder({ name });
       setShowNewFolder(false);
-      toast.success("Folder created");
+      toast.success("Project created");
       navigate({ to: `/folder/${result.folder.id}` });
     } catch (err) {
-      toast.error(err.message || "Failed to create folder");
+      toast.error(err.message || "Failed to create project");
     }
   };
 
@@ -488,7 +479,7 @@ const Sidebar = () => {
     return effectiveCollapsed ? "-translate-x-full" : "translate-x-0";
   };
 
-  const handleLogoClick = async () => {
+  const handleTitleClick = async () => {
     if (isUtilityRoute || effectiveCollapsed) {
       await handleNewChat();
       if (!isMobile && sidebarCollapsed) {
@@ -509,19 +500,16 @@ const Sidebar = () => {
 
       {/* Sidebar Panel - slides completely off-screen when collapsed */}
       <div
-        className={`bg-theme-canvas-alt border-theme-surface-strong ease-snappy fixed inset-y-0 left-0 z-50 flex w-72 transform-gpu flex-col border-r transition-transform duration-300 ${getSidebarTransform()}`}>
+        className={`bg-theme-canvas-alt border-theme-surface-strong ease-snappy fixed inset-y-0 left-0 z-50 flex w-72 transform-gpu flex-col border-r transition-transform duration-300 select-none [&_input]:select-text ${getSidebarTransform()}`}>
         {/* Header */}
         <div className="flex items-center justify-between p-6">
           <div
-            className="flex cursor-pointer items-center gap-2"
-            onClick={handleLogoClick}
+            className="min-w-0 cursor-pointer"
+            onClick={handleTitleClick}
             title={
               isUtilityRoute ? "Return to chat" : effectiveCollapsed ? "Expand sidebar" : undefined
             }>
-            <div className="bg-theme-primary flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg shadow-lg">
-              <LogoIcon className="h-5 w-5 text-white" />
-            </div>
-            <h1 className="text-theme-text overflow-hidden text-xl font-extrabold tracking-tight whitespace-nowrap">
+            <h1 className="text-theme-text truncate text-xl font-extrabold tracking-tight">
               {appName}
             </h1>
           </div>
@@ -547,14 +535,24 @@ const Sidebar = () => {
 
         {/* Primary Actions */}
         <div className="flex flex-col gap-4 px-6">
-          {/* New Chat */}
-          <button
-            onClick={handleNewChat}
-            className="btn btn-primary flex w-full transform items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-medium shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
-            title="New Chat">
-            <SquarePen size={18} />
-            <span>New Chat</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleNewChat}
+              className="btn btn-primary flex flex-1 transform items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-medium shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+              title="New Chat">
+              <SquarePen size={18} />
+              <span>New Chat</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => toast.info("기능 준비 중입니다")}
+              className="border-theme-border text-theme-text-muted hover:bg-theme-surface hover:text-theme-text flex w-11 shrink-0 items-center justify-center rounded-xl border transition-colors duration-150"
+              title="Temporary Chat"
+              aria-label="Temporary Chat">
+              <CircleDashed size={20} />
+            </button>
+          </div>
 
           {/* Search */}
           <div className="group relative">
@@ -593,12 +591,12 @@ const Sidebar = () => {
             <div className="mb-2">
               <div className="flex items-center justify-between px-2 py-2">
                 <span className="text-theme-overlay text-xs font-bold tracking-widest uppercase opacity-70">
-                  Folders
+                  Projects
                 </span>
                 <button
                   onClick={() => setShowNewFolder(true)}
                   className="text-theme-text-muted hover:text-theme-text ease-snappy rounded p-1 transition-colors hover:bg-white/5"
-                  title="New Folder">
+                  title="New Project">
                   <FolderPlus size={14} />
                 </button>
               </div>
@@ -640,7 +638,9 @@ const Sidebar = () => {
                   )}
                 </div>
               ) : !showNewFolder ? (
-                <div className="text-theme-text-muted px-3 py-2 text-xs italic">No folders yet</div>
+                <div className="text-theme-text-muted px-3 py-2 text-xs italic">
+                  No projects yet
+                </div>
               ) : null}
 
               <div className="bg-theme-surface mx-2 my-3 h-px" />

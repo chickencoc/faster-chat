@@ -236,6 +236,14 @@ export function createChatUtils({ db }) {
       return result.count;
     },
 
+    getLatestMessage(chatId, userId) {
+      return db
+        .prepare(
+          "SELECT id, role FROM messages WHERE chat_id = ? AND user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1"
+        )
+        .get(chatId, userId);
+    },
+
     getChatsByUserIdPaginated(userId, limit = 50, offset = 0, includeArchived = false) {
       const stmt = db.prepare(`
       SELECT * FROM chats
@@ -249,14 +257,16 @@ export function createChatUtils({ db }) {
       return stmt.all(userId, limit, offset);
     },
 
-    getMessagesByChatAndUserPaginated(chatId, userId, limit = 100, offset = 0) {
+    getMessagesByChatAndUserPaginated(chatId, userId, limit = 100, offset = 0, latest = false) {
+      const direction = latest ? "DESC" : "ASC";
       const stmt = db.prepare(`
       SELECT * FROM messages
       WHERE chat_id = ? AND user_id = ?
-      ORDER BY created_at ASC, rowid ASC
+      ORDER BY created_at ${direction}, rowid ${direction}
       LIMIT ? OFFSET ?
     `);
       const messages = stmt.all(chatId, userId, limit, offset);
+      if (latest) messages.reverse();
       for (const msg of messages) {
         parseMessageMetadata(msg);
       }

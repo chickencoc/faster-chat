@@ -26,7 +26,7 @@ main() {
   db="server/data/chat.db"
   if [ -f "$db" ]; then
     echo "==> Backing up database..."
-    cp "$db" "$db.backup-$(date +%Y%m%d-%H%M%S)"
+    (umask 077 && cp "$db" "$db.backup-$(date +%Y%m%d-%H%M%S)")
     ls -t "$db".backup-* | tail -n +6 | xargs -r rm --   # keep 5 most recent
   fi
 

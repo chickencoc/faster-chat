@@ -11,7 +11,7 @@ const MoveToFolderModal = ({ chat, onClose }) => {
   const handleMove = async (folderId) => {
     try {
       await moveChatToFolder({ chatId: chat.id, folderId });
-      toast.success(folderId ? "Chat moved to folder" : "Chat removed from folder");
+      toast.success(folderId ? "Chat moved to project" : "Chat removed from project");
       onClose();
     } catch (err) {
       toast.error(err.message || "Failed to move chat");
@@ -22,7 +22,7 @@ const MoveToFolderModal = ({ chat, onClose }) => {
   const currentFolder = currentFolderId ? folders.find((f) => f.id === currentFolderId) : null;
 
   return createPortal(
-    <Modal isOpen={true} onClose={onClose} title="Move to Folder">
+    <Modal isOpen={true} onClose={onClose} title="Move to Project">
       <p className="text-theme-text-muted mb-3 truncate text-sm">{chat.title || "Untitled Chat"}</p>
 
       {currentFolder && (
@@ -45,7 +45,7 @@ const MoveToFolderModal = ({ chat, onClose }) => {
               disabled={isMoving}
               className="text-theme-text-muted hover:bg-theme-surface-strong hover:text-theme-text ease-snappy flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors duration-75 disabled:opacity-50">
               <FolderMinus size={16} className="text-theme-red" />
-              <span>Remove from folder</span>
+              <span>Remove from project</span>
             </button>
             <div className="bg-theme-surface my-2 h-px" />
           </>
@@ -53,7 +53,7 @@ const MoveToFolderModal = ({ chat, onClose }) => {
 
         {folders.length === 0 ? (
           <div className="text-theme-text-muted py-4 text-center text-sm italic">
-            No folders yet. Create one from the sidebar.
+            No projects yet. Create one from the sidebar.
           </div>
         ) : (
           folders.map((folder) => {

@@ -151,7 +151,7 @@ const UsersTab = () => {
                     </div>
                   </td>
                   <td className="text-theme-text-muted py-4">
-                    {user.email || `${user.username}@mk3y.com`}
+                    {user.email || "Not set"}
                   </td>
                   <td className="text-theme-text-muted py-4">
                     {formatRelativeTime(user.last_active)}

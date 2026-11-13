@@ -2,6 +2,7 @@ import { getCookie } from "hono/cookie";
 import { dbUtils } from "../lib/db.js";
 
 const COOKIE_NAME = "session";
+const BACKGROUND_CHAT_READ = /^\/api\/chats\/[^/]+(?:\/(?:messages|stream))?\/?$/;
 
 /**
  * Middleware to ensure a valid session exists
@@ -14,7 +15,8 @@ export async function ensureSession(c, next) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  const session = dbUtils.getSession(sessionId);
+  const touch = c.req.method !== "GET" || !BACKGROUND_CHAT_READ.test(c.req.path);
+  const session = dbUtils.getSession(sessionId, { touch });
 
   if (!session) {
     return c.json({ error: "Session expired" }, 401);

@@ -4,9 +4,8 @@ import ChatInterface from "@/components/chat/ChatInterface";
 import { toast } from "sonner";
 
 const mockCreateMessage = vi.fn(async () => ({}));
-const mockGenerate = vi.fn((vars, opts) => {
+const mockGenerate = vi.fn((vars) => {
   mockGenerate.lastVars = vars;
-  mockGenerate.lastOnSuccess = opts?.onSuccess;
 });
 let imageGenHookOptions = null;
 let inputAreaProps = null;
@@ -159,7 +158,6 @@ describe("ChatInterface image generation", () => {
     modelSelectorProps = null;
     lastUsedModels = {};
     mockGenerate.lastVars = null;
-    mockGenerate.lastOnSuccess = null;
   });
 
   test("uses the enabled default model for requests when the stored model is unavailable", () => {
@@ -239,14 +237,17 @@ describe("ChatInterface image generation", () => {
     });
     expect(rememberModel).toHaveBeenCalledWith(7, "image", "flux");
 
-    await mockGenerate.lastOnSuccess({
-      images: [
-        { id: "f1", model: "flux" },
-        { id: "f2", model: "flux" },
-        { id: "f3", model: "flux" },
-      ],
-      failures: [],
-    });
+    await imageGenHookOptions.onSuccess(
+      {
+        images: [
+          { id: "f1", model: "flux" },
+          { id: "f2", model: "flux" },
+          { id: "f3", model: "flux" },
+        ],
+        failures: [],
+      },
+      mockGenerate.lastVars
+    );
 
     await waitFor(() => expect(mockCreateMessage).toHaveBeenCalledTimes(2));
     const assistantCall = mockCreateMessage.mock.calls[1][0];
@@ -259,10 +260,13 @@ describe("ChatInterface image generation", () => {
   test("posts the successful images and reports partial failures", async () => {
     await submitImage();
 
-    await mockGenerate.lastOnSuccess({
-      images: [{ id: "f1", model: "flux" }],
-      failures: [{ index: 1, error: "Rate limit exceeded. Please try again later." }],
-    });
+    await imageGenHookOptions.onSuccess(
+      {
+        images: [{ id: "f1", model: "flux" }],
+        failures: [{ index: 1, error: "Rate limit exceeded. Please try again later." }],
+      },
+      mockGenerate.lastVars
+    );
 
     await waitFor(() => expect(mockCreateMessage).toHaveBeenCalledTimes(2));
     const assistantCall = mockCreateMessage.mock.calls[1][0];

@@ -60,8 +60,12 @@ export const chatsClient = {
   },
 
   async getMessages(chatId) {
-    const data = await chatsFetch(`/${chatId}/messages`);
+    const data = await chatsFetch(`/${chatId}/messages?latest=1`);
     return data.messages;
+  },
+
+  async stopCompletion(chatId, generationId) {
+    return chatsFetch(`/${chatId}/completion/${generationId}`, { method: "DELETE" });
   },
 
   async createMessage(chatId, message) {

@@ -2,7 +2,6 @@ import { extractTextContent } from "@/lib/messageUtils";
 import { useRef, useState } from "preact/hooks";
 import { useChatPersistence } from "./useChatPersistence";
 import { useChatStream } from "./useChatStream";
-import { useDeleteMessageMutation } from "./useChatsQuery";
 
 export function useChat({
   id: chatId,
@@ -16,7 +15,6 @@ export function useChat({
   const [inputFiles, setInputFiles] = useState([]);
   const [isStarting, setIsStarting] = useState(false);
   const pendingSend = useRef(null);
-  const deleteMessage = useDeleteMessageMutation();
 
   const {
     chat,
@@ -25,7 +23,7 @@ export function useChat({
     isChatError,
     isSaving,
     saveUserMessage,
-    saveAssistantMessage,
+    refreshMessages,
   } = useChatPersistence(chatId);
 
   const stream = useChatStream({
@@ -36,18 +34,8 @@ export function useChat({
     webSearchEnabled,
     memoryEnabled,
     persistedMessages,
-    onMessageComplete: async ({ id, replacedMessageId, content, fileIds, metadata, createdAt }) => {
-      if (chatId) {
-        try {
-          await saveAssistantMessage({ id, content, model, fileIds, metadata, createdAt }, chatId);
-          if (replacedMessageId) {
-            await deleteMessage.mutateAsync({ chatId, messageId: replacedMessageId });
-          }
-        } catch (err) {
-          console.error("Failed to save response", err);
-        }
-      }
-    },
+    generationId: chat?.generationId,
+    refreshMessages,
   });
 
   async function submitMessage({ content, fileIds = [] }) {

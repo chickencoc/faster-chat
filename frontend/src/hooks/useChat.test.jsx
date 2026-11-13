@@ -6,7 +6,6 @@ import { useChatStream } from "./useChatStream";
 
 vi.mock("./useChatPersistence", () => ({ useChatPersistence: vi.fn() }));
 vi.mock("./useChatStream", () => ({ useChatStream: vi.fn() }));
-vi.mock("./useChatsQuery", () => ({ useDeleteMessageMutation: () => ({}) }));
 
 afterEach(cleanup);
 

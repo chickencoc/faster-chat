@@ -11,6 +11,7 @@ import { migration as disableRemovedProviders } from "./010_disable_removed_prov
 import { migration as hideEmptyChats } from "./011_hide_empty_chats.js";
 import { migration as chatModelSettings } from "./012_chat_model_settings.js";
 import { migration as userEmail } from "./013_user_email.js";
+import { migration as sessionSecurity } from "./014_session_security.js";
 
 export const migrations = [
   initialSchema,
@@ -26,4 +27,5 @@ export const migrations = [
   hideEmptyChats,
   chatModelSettings,
   userEmail,
+  sessionSecurity,
 ];

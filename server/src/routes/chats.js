@@ -22,6 +22,7 @@ import { decryptApiKey } from "../lib/encryption.js";
 import { getModelInstance } from "../lib/providerFactory.js";
 import { createGeneratedFileTransform } from "../lib/generatedFiles.js";
 import { createGeneratedImageTransform } from "../lib/generatedImages.js";
+import { getCompletedMessage, keepGenerationRunning } from "../lib/chatGeneration.js";
 import { humanizeProviderError } from "../lib/providerErrors.js";
 import { preflightAttachments } from "../lib/fileUtils.js";
 import { ENDPOINT_RATE_LIMITS } from "../lib/constants.js";
@@ -39,6 +40,8 @@ import {
 } from "../lib/completion.js";
 
 export const chatsRouter = new Hono();
+const activeGenerations = new Map();
+const MAX_GENERATION_DURATION_MS = 10 * 60 * 1000;
 
 chatsRouter.use("/*", ensureSession);
 
@@ -109,6 +112,7 @@ function chatDetails(chat) {
     reasoningEffort: chat.reasoning_effort,
     lastImageModel: chat.last_image_model,
     imageComplexity: chat.image_complexity,
+    generationId: activeGenerations.get(chat.id)?.id ?? null,
     createdAt: chat.created_at,
     updatedAt: chat.updated_at,
   };
@@ -265,7 +269,14 @@ chatsRouter.get("/:chatId/messages", async (c) => {
 
   const limit = Math.min(parseInt(c.req.query("limit") || "200", 10), 500);
   const offset = parseInt(c.req.query("offset") || "0", 10);
-  const messages = dbUtils.getMessagesByChatAndUserPaginated(chatId, user.id, limit, offset);
+  const latest = c.req.query("latest") === "1";
+  const messages = dbUtils.getMessagesByChatAndUserPaginated(
+    chatId,
+    user.id,
+    limit,
+    offset,
+    latest
+  );
 
   return c.json({
     messages: messages.map((msg) => ({
@@ -287,6 +298,9 @@ chatsRouter.post("/:chatId/messages", async (c) => {
   const chatId = c.req.param("chatId");
   const body = await c.req.json();
   const validated = MessageSchema.parse(body);
+  if (validated.role === "user" && activeGenerations.has(chatId)) {
+    return c.json({ error: "A response is already being generated" }, HTTP_STATUS.CONFLICT);
+  }
 
   const messageId = validated.id || crypto.randomUUID();
   // Validate attachment ownership
@@ -358,6 +372,8 @@ const CompletionRequestSchema = z.object({
   reasoningEffort: z.enum(OPENAI_REASONING_EFFORTS).optional(),
   imageGenerationModel: z.enum(OPENAI_IMAGE_MODELS).optional(),
   memoryEnabled: z.boolean().optional().default(true),
+  generationId: z.string().uuid().optional(),
+  replaceMessageId: z.string().optional(),
 });
 
 const FILE_GENERATION_INSTRUCTION =
@@ -417,12 +433,17 @@ chatsRouter.post(
   "/:chatId/completion",
   createRateLimiter(ENDPOINT_RATE_LIMITS.COMPLETION),
   async (c) => {
+    const user = c.get("user");
+    const chatId = c.req.param("chatId");
+    let generation;
+    let handedOff = false;
     try {
-      const user = c.get("user");
-      const chatId = c.req.param("chatId");
-
       const body = await c.req.json();
       const validated = CompletionRequestSchema.parse(body);
+
+      if (activeGenerations.has(chatId)) {
+        return c.json({ error: "A response is already being generated" }, HTTP_STATUS.CONFLICT);
+      }
 
       const modelId = validated.model;
       const modelRecord = dbUtils.getEnabledModelWithProvider(modelId);
@@ -432,6 +453,20 @@ chatsRouter.post(
           HTTP_STATUS.BAD_REQUEST
         );
       }
+      const replacedMessageId = validated.replaceMessageId;
+      if (replacedMessageId) {
+        const previous = dbUtils.getLatestMessage(chatId, user.id);
+        if (previous?.id !== replacedMessageId || previous.role !== "assistant") {
+          return c.json({ error: "The response to regenerate has changed" }, HTTP_STATUS.CONFLICT);
+        }
+      }
+
+      generation = {
+        id: validated.generationId ?? crypto.randomUUID(),
+        controller: new AbortController(),
+      };
+      activeGenerations.set(chatId, generation);
+
       const model = getModelInstance(modelRecord, decryptApiKey);
       const memoryRequestEnabled = validated.memoryEnabled !== false;
       const memoryEnabledForRequest = isMemoryEnabledForRequest({
@@ -559,9 +594,16 @@ chatsRouter.post(
         modelId,
         nativeOpenAI ? validated.reasoningEffort : null
       );
-      const stream = await streamText({
+      const startedAt = performance.now();
+      let ttftMs = null;
+      let streamError = false;
+      const abortSignal = AbortSignal.any([
+        generation.controller.signal,
+        AbortSignal.timeout(MAX_GENERATION_DURATION_MS),
+      ]);
+      const stream = streamText({
         model: memoryModel,
-        abortSignal: c.req.raw.signal,
+        abortSignal,
         messages,
         maxTokens: COMPLETION_CONSTANTS.MAX_TOKENS,
         providerOptions: {
@@ -599,13 +641,45 @@ chatsRouter.post(
       });
 
       const providerLabel = modelRecord.provider_display_name || modelRecord.provider_name;
-      return stream.toUIMessageStreamResponse({
+      const response = stream.toUIMessageStreamResponse({
+        generateMessageId: () => crypto.randomUUID(),
         sendSources: nativeOpenAI,
         onError: (error) => {
+          streamError = true;
           console.error("Stream error:", error);
           return humanizeProviderError(error, providerLabel);
         },
+        onFinish: ({ responseMessage, isAborted, finishReason }) => {
+          if (
+            streamError ||
+            finishReason === "error" ||
+            (replacedMessageId && (isAborted || abortSignal.aborted)) ||
+            !dbUtils.getChatByIdAndUser(chatId, user.id)
+          ) {
+            return;
+          }
+          const completed = getCompletedMessage(responseMessage, { startedAt, ttftMs });
+          if (!completed) return;
+          db.transaction(() => {
+            dbUtils.createMessage(
+              responseMessage.id,
+              chatId,
+              user.id,
+              "assistant",
+              completed.content,
+              modelId,
+              completed.fileIds,
+              completed.metadata
+            );
+            if (replacedMessageId) {
+              dbUtils.deleteMessageByUser(replacedMessageId, user.id, chatId);
+            }
+          })();
+        },
         messageMetadata: ({ part }) => {
+          if (part.type === "text-delta" && ttftMs == null) {
+            ttftMs = Math.round(performance.now() - startedAt);
+          }
           if (part.type !== "finish") return undefined;
           return {
             ...(generatedFileIds.length && { fileIds: generatedFileIds }),
@@ -618,6 +692,11 @@ chatsRouter.post(
           };
         },
       });
+      const detachedResponse = keepGenerationRunning(response, () => {
+        activeGenerations.delete(chatId);
+      });
+      handedOff = true;
+      return detachedResponse;
     } catch (error) {
       console.error("Completion error:", error);
       if (error instanceof AttachmentDenialError) {
@@ -635,9 +714,22 @@ chatsRouter.post(
         return c.json({ code: mapped.code, error: mapped.error }, HTTP_STATUS.BAD_REQUEST);
       }
       return c.json({ error: "Completion failed" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    } finally {
+      if (generation && !handedOff) {
+        generation.controller.abort();
+        activeGenerations.delete(chatId);
+      }
     }
   }
 );
+
+chatsRouter.delete("/:chatId/completion/:generationId", (c) => {
+  const generation = activeGenerations.get(c.req.param("chatId"));
+  if (generation?.id === c.req.param("generationId")) {
+    generation.controller.abort();
+  }
+  return c.json({ success: true });
+});
 
 chatsRouter.get("/:chatId/stream", async (c) => {
   return c.body(null, 204);

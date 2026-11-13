@@ -6,7 +6,7 @@
  */
 export const ToolbarGroup = ({ children, className = "" }) => (
   <div className={`relative flex items-center gap-0.5 p-1 ${className}`}>
-    <div className="bg-theme-surface border-theme-border pointer-events-none absolute inset-0 -z-10 rounded-xl border shadow-lg" />
+    <div className="border-theme-border pointer-events-none absolute -z-10" />
     {children}
   </div>
 );

@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { useAuthState } from "@/state/useAuthState";
-import { useChatQuery } from "./useChatsQuery";
 import { memoryKeys } from "./queryKeys";
 
 const MEMORY_STATUS_STALE_TIME_MS = 60000;
@@ -27,9 +26,8 @@ export function useUserMemories(enabled) {
   });
 }
 
-export function useChatMemoryEnabled(chatId) {
+export function useChatMemoryEnabled() {
   const { data: status } = useMemoryStatus();
-  const { data: chatData } = useChatQuery(chatId);
 
-  return !!status?.globalEnabled && !!status?.enabled && !chatData?.memoryDisabled;
+  return !!status?.globalEnabled && !!status?.enabled;
 }

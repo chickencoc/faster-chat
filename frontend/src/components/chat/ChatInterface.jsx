@@ -49,7 +49,7 @@ const ChatInterface = ({ chatId, chat }) => {
   const autoScroll = useUiState((state) => state.autoScroll);
   const webSearchEnabled = useUiState((state) => state.webSearchEnabled);
   const setWebSearchEnabled = useUiState((state) => state.setWebSearchEnabled);
-  const memoryEnabled = useChatMemoryEnabled(chatId);
+  const memoryEnabled = useChatMemoryEnabled();
   const [modelOverride, setModelOverride] = useState(null);
   const [imageModelOverride, setImageModelOverride] = useState(null);
   const [effortOverride, setReasoningEffort] = useState(null);
@@ -160,11 +160,40 @@ const ChatInterface = ({ chatId, chat }) => {
 
   const createMessageMutation = useCreateMessageMutation();
   const { generate: generateImage, isGenerating } = useImageGeneration({
+    onSuccess: saveGeneratedImages,
     onError: (error) => {
       const failureReason = error.body?.failures?.[0]?.error;
       toast.error(failureReason || error.message || "Image generation failed");
     },
   });
+
+  async function saveGeneratedImages(data, { chatId, prompt }) {
+    const images = data.images || [];
+    const failures = data.failures || [];
+
+    if (failures.length > 0) {
+      toast.warning(`${images.length} of ${images.length + failures.length} images generated`);
+    }
+
+    const assistantMessageId = crypto.randomUUID();
+    await createMessageMutation.mutateAsync({
+      chatId,
+      message: {
+        id: assistantMessageId,
+        role: "assistant",
+        content:
+          images.length === 1
+            ? `Generated image: "${prompt}"`
+            : `Generated ${images.length} images: "${prompt}"`,
+        fileIds: images.map((image) => image.id),
+        model: images[0].model,
+        createdAt: Date.now(),
+      },
+    });
+    if (failures.length === 0) {
+      toast.success("Image generated!");
+    }
+  }
 
   async function handleImageSubmit(prompt, referenceFiles) {
     if (!prompt || !chatId) return;
@@ -189,48 +218,15 @@ const ChatInterface = ({ chatId, chat }) => {
     setInput("");
     rememberModel(userId, "image", imageModel?.model_id);
 
-    generateImage(
-      {
-        prompt,
-        chatId,
-        model: imageModel?.model_id,
-        aspectRatio,
-        numImages: imageCount,
-        ...(canSetComplexity && { complexity: imageComplexity }),
-        referenceFileIds,
-      },
-      {
-        onSuccess: async (data) => {
-          const images = data.images || [];
-          const failures = data.failures || [];
-
-          if (failures.length > 0) {
-            toast.warning(
-              `${images.length} of ${images.length + failures.length} images generated`
-            );
-          }
-
-          const assistantMessageId = crypto.randomUUID();
-          await createMessageMutation.mutateAsync({
-            chatId,
-            message: {
-              id: assistantMessageId,
-              role: "assistant",
-              content:
-                images.length === 1
-                  ? `Generated image: "${prompt}"`
-                  : `Generated ${images.length} images: "${prompt}"`,
-              fileIds: images.map((image) => image.id),
-              model: images[0].model,
-              createdAt: Date.now(),
-            },
-          });
-          if (failures.length === 0) {
-            toast.success("Image generated!");
-          }
-        },
-      }
-    );
+    generateImage({
+      prompt,
+      chatId,
+      model: imageModel?.model_id,
+      aspectRatio,
+      numImages: imageCount,
+      ...(canSetComplexity && { complexity: imageComplexity }),
+      referenceFileIds,
+    });
   }
 
   useLayoutEffect(() => {
@@ -243,7 +239,7 @@ const ChatInterface = ({ chatId, chat }) => {
       <Toaster position="top-center" theme="dark" richColors expand visibleToasts={3} />
 
       <div className="relative flex-1">
-        <div className="sticky top-0 z-10 flex items-center justify-between px-2 py-3 md:px-8 md:py-6">
+        <div className="bg-theme-background sticky top-0 z-10 flex items-center justify-between px-2 py-3 md:px-8 md:py-5">
           <div className="flex items-center gap-3">
             <SidebarToolbar onNewChat={handleNewChat} onSearch={() => {}} />
           </div>

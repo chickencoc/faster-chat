@@ -10,20 +10,14 @@ describe("memory helpers", () => {
     const dbUtils = {
       getSetting: () => "true",
       getUserMemoryEnabled: () => true,
-      getChatMemoryDisabled: () => false,
     };
 
-    expect(
-      isMemoryEnabledForRequest({ dbUtils, userId: 1, chatId: "chat-1", requestEnabled: true })
-    ).toBe(true);
-    expect(
-      isMemoryEnabledForRequest({ dbUtils, userId: 1, chatId: "chat-1", requestEnabled: false })
-    ).toBe(false);
+    expect(isMemoryEnabledForRequest({ dbUtils, userId: 1, requestEnabled: true })).toBe(true);
+    expect(isMemoryEnabledForRequest({ dbUtils, userId: 1, requestEnabled: false })).toBe(false);
     expect(
       isMemoryEnabledForRequest({
         dbUtils: { ...dbUtils, getSetting: () => "false" },
         userId: 1,
-        chatId: "chat-1",
         requestEnabled: true,
       })
     ).toBe(false);
@@ -31,15 +25,6 @@ describe("memory helpers", () => {
       isMemoryEnabledForRequest({
         dbUtils: { ...dbUtils, getUserMemoryEnabled: () => false },
         userId: 1,
-        chatId: "chat-1",
-        requestEnabled: true,
-      })
-    ).toBe(false);
-    expect(
-      isMemoryEnabledForRequest({
-        dbUtils: { ...dbUtils, getChatMemoryDisabled: () => true },
-        userId: 1,
-        chatId: "chat-1",
         requestEnabled: true,
       })
     ).toBe(false);
@@ -49,7 +34,6 @@ describe("memory helpers", () => {
     const middleware = createMemoryMiddleware({
       getSetting: () => "true",
       getUserMemoryEnabled: () => true,
-      getChatMemoryDisabled: () => false,
       getMemoriesForUser: () => [{ fact: "uses Arch Linux" }],
     });
 
@@ -78,7 +62,6 @@ describe("memory helpers", () => {
     const wrappedModel = wrapModelWithMemory(model, {
       getSetting: () => "true",
       getUserMemoryEnabled: () => true,
-      getChatMemoryDisabled: () => false,
       getMemoriesForUser: () => [{ fact: "uses Arch Linux" }],
     });
 
@@ -129,7 +112,6 @@ describe("memory helpers", () => {
     const middleware = createMemoryMiddleware({
       getSetting: () => "true",
       getUserMemoryEnabled: () => true,
-      getChatMemoryDisabled: () => false,
       getMemoriesForUser: () => [{ fact: "prefers Python" }],
     });
 

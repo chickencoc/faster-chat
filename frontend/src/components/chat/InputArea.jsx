@@ -18,7 +18,6 @@ import {
   X,
 } from "lucide-preact";
 import { toast } from "sonner";
-import ChatMemoryButton from "./ChatMemoryButton";
 import InspirationPanel from "@/components/imagegen/InspirationPanel";
 import Chip from "@/components/ui/Chip";
 import { useFileUploader } from "@/hooks/useFileUploader";
@@ -424,7 +423,6 @@ const InputArea = ({
               disabled={disabled}>
               <Image size={18} />
             </button>
-            <ChatMemoryButton chatId={chatId} disabled={disabled} />
 
             {imageMode && (
               <button

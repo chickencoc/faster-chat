@@ -94,10 +94,6 @@ vi.mock("@/hooks/useFileDragDrop", () => ({
 }));
 
 // Mock child components that depend on context/routing
-vi.mock("@/components/chat/ChatMemoryButton", () => ({
-  default: () => <div data-testid="memory-button" />,
-}));
-
 vi.mock("@/components/chat/FilePreviewList", () => ({
   FilePreviewList: () => <div data-testid="file-preview-list" />,
 }));

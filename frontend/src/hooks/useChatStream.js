@@ -1,13 +1,8 @@
 import { DefaultChatTransport } from "ai";
 import { useChat as useAIChat } from "@ai-sdk/react";
 import { useEffect, useMemo, useRef } from "preact/hooks";
-import {
-  deduplicateMessages,
-  ensureTimestamp,
-  getMessageTimestamp,
-  hasTextContent,
-} from "@/lib/messageUtils";
-import { buildTokenStats } from "@/lib/tokenStats";
+import { deduplicateMessages, ensureTimestamp } from "@/lib/messageUtils";
+import { chatsClient } from "@/lib/chatsClient";
 import { useAuthState } from "@/state/useAuthState";
 import { useUiState } from "@/state/useUiState";
 import { MESSAGE_CONSTANTS } from "@faster-chat/shared";
@@ -40,7 +35,8 @@ export function useChatStream({
   webSearchEnabled,
   memoryEnabled,
   persistedMessages,
-  onMessageComplete,
+  generationId,
+  refreshMessages,
 }) {
   const userId = useAuthState((state) => state.user?.id);
   const queryClient = useQueryClient();
@@ -60,11 +56,15 @@ export function useChatStream({
 
   const messageTimestampsRef = useRef(new Map());
   const regeneratingId = useRef(null);
+  const localJob = useRef(null);
+  const observedGeneration = useRef(generationId);
 
-  const timingRef = useRef({ sendAt: null, ttftMs: null });
-  const resetTiming = () => {
-    timingRef.current = { sendAt: performance.now(), ttftMs: null };
-  };
+  useEffect(() => {
+    if (observedGeneration.current && !generationId) {
+      refreshMessages();
+    }
+    observedGeneration.current = generationId;
+  }, [generationId, refreshMessages]);
 
   const formattedMessages = (persistedMessages ?? []).map((msg) =>
     ensureTimestamp(msg, messageTimestampsRef)
@@ -77,6 +77,12 @@ export function useChatStream({
         fetch: async (input, init) => {
           const response = await fetch(input, init);
           if (response.ok) {
+            const job = localJob.current;
+            if (job?.stopRequested) {
+              chatsClient.stopCompletion(chatId, job.id).catch((err) => {
+                console.error("Failed to stop response", err);
+              });
+            }
             queryClient.invalidateQueries({
               queryKey: chatKeys.detail(userId, chatId),
               exact: true,
@@ -104,6 +110,8 @@ export function useChatStream({
           return {
             body: {
               model: modelRef.current,
+              generationId: localJob.current?.id,
+              ...(trigger === "regenerate-message" && { replaceMessageId: regeneratingId.current }),
               ...openAIOptions.current,
               systemPromptId: "default",
               messages: normalized,
@@ -123,67 +131,19 @@ export function useChatStream({
     regenerate,
     status,
     error,
-    stop,
     clearError,
   } = useAIChat({
     id: chatId,
     messages: [],
     transport,
-    onFinish: async ({ message, isAbort, isError }) => {
-      const replacedMessageId = regeneratingId.current;
-      if (replacedMessageId && (isAbort || isError)) return;
-      const content = message.parts
-        .filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join("");
-
-      const toolParts = message.parts.filter(
-        (part) =>
-          part.type === "source-url" || (part.type === "tool-invocation" && part.state === "result")
-      );
-      const fileIds = message.metadata?.fileIds ?? [];
-      const generatedFileDownloadFailed = message.metadata?.generatedFileDownloadFailed;
-      const reasoning = message.parts
-        .filter((part) => part.type === "reasoning" && part.text.trim())
-        .map((part) => part.text);
-
-      const { sendAt, ttftMs } = timingRef.current;
-      const stats = buildTokenStats({
-        usage: message.metadata?.usage,
-        ttftMs,
-        durationMs: sendAt != null ? Math.round(performance.now() - sendAt) : null,
-      });
-
-      const metadata = {
-        ...(toolParts.length > 0 ? { toolParts } : {}),
-        ...(reasoning.length > 0 ? { reasoning } : {}),
-        ...(generatedFileDownloadFailed && { generatedFileDownloadFailed }),
-        ...(stats ? { stats } : {}),
-      };
-
-      if (onMessageComplete && (content.trim() || fileIds.length || generatedFileDownloadFailed)) {
-        await onMessageComplete({
-          id: message.id,
-          replacedMessageId,
-          content,
-          fileIds,
-          metadata: Object.keys(metadata).length > 0 ? metadata : null,
-          createdAt: getMessageTimestamp(message),
-        });
-      }
+    onFinish: () => {
+      localJob.current = null;
+      queryClient.invalidateQueries({ queryKey: chatKeys.detail(userId, chatId) });
     },
   });
 
-  useEffect(() => {
-    const { sendAt, ttftMs } = timingRef.current;
-    if (sendAt == null || ttftMs != null) return;
-    const last = streamingMessages[streamingMessages.length - 1];
-    if (last?.role === "assistant" && hasTextContent(last)) {
-      timingRef.current.ttftMs = Math.round(performance.now() - sendAt);
-    }
-  }, [streamingMessages]);
-
-  const isStreaming = status === "streaming" || status === "submitted";
+  const isLocallyStreaming = status === "streaming" || status === "submitted";
+  const isStreaming = isLocallyStreaming || Boolean(generationId);
 
   const streamingMessagesWithModel = streamingMessages.map((msg) => ({
     ...ensureTimestamp(msg, messageTimestampsRef),
@@ -191,13 +151,14 @@ export function useChatStream({
     fileIds: msg.fileIds ?? msg.metadata?.fileIds,
   }));
 
-  const messages = isStreaming
+  const messages = isLocallyStreaming
     ? deduplicateMessages([...formattedMessages, ...streamingMessagesWithModel]).filter(
         (message) => message.id !== regeneratingId.current
       )
     : formattedMessages;
 
   async function send({ id, content, fileIds = [], createdAt }) {
+    if (localJob.current) return;
     const message = {
       id: id || crypto.randomUUID(),
       role: "user",
@@ -206,16 +167,17 @@ export function useChatStream({
     };
     if (fileIds.length > 0) message.fileIds = fileIds;
     messageTimestampsRef.current.set(message.id, message.createdAt);
-    resetTiming();
+    localJob.current = { id: crypto.randomUUID(), stopRequested: false };
+    setMessages(formattedMessages);
     await sendMessage(message);
   }
 
-  async function regenerateWithTiming() {
+  async function regenerateResponse() {
     const previous = formattedMessages.at(-1);
-    if (previous?.role !== "assistant" || regeneratingId.current) return;
+    if (previous?.role !== "assistant" || isStreaming || localJob.current) return;
     regeneratingId.current = previous.id;
     setMessages(formattedMessages);
-    resetTiming();
+    localJob.current = { id: crypto.randomUUID(), stopRequested: false };
     try {
       await regenerate({ messageId: previous.id });
     } finally {
@@ -223,12 +185,26 @@ export function useChatStream({
     }
   }
 
+  async function stop() {
+    const job = localJob.current;
+    if (job) job.stopRequested = true;
+    const targetId = job?.id ?? generationId;
+    if (!targetId) return;
+    try {
+      await chatsClient.stopCompletion(chatId, targetId);
+    } catch (err) {
+      console.error("Failed to stop response", err);
+    } finally {
+      queryClient.invalidateQueries({ queryKey: chatKeys.detail(userId, chatId), exact: true });
+    }
+  }
+
   return {
     messages,
     send,
-    regenerate: regenerateWithTiming,
+    regenerate: regenerateResponse,
     stop,
-    status,
+    status: isStreaming && !isLocallyStreaming ? "submitted" : status,
     error,
     clearError,
     isStreaming,

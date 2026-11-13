@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import {
   createTestApp,
   resetDatabase,
@@ -101,6 +101,137 @@ test("OpenAI chat sends the selected reasoning level and native tools to Respons
   }
 });
 
+describe("background completion", () => {
+  const chatId = "background-completion";
+  const path = `/api/chats/${chatId}`;
+  let app, cookie, memberCookie, providerSignal, finishResponse, originalFetch;
+
+  beforeEach(async () => {
+    resetDatabase();
+    app = createTestApp();
+    const admin = await seedAdminUser(app);
+    cookie = admin.cookie;
+    ({ cookie: memberCookie } = await seedMemberUser(app, cookie));
+    dbUtils.createChat(chatId, admin.user.id);
+    const { encryptedKey, iv, authTag } = encryptApiKey("sk-fixture");
+    const provider = dbUtils.createProvider(
+      "openai",
+      "OpenAI",
+      "official",
+      null,
+      encryptedKey,
+      iv,
+      authTag
+    );
+    dbUtils.createModel(provider, "gpt-6.1-terra", "GPT-6.1 Terra", true, "text");
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_url, init) => {
+      providerSignal = init.signal;
+      const encoder = new TextEncoder();
+      const item = { type: "message", id: "msg_1" };
+      const body = new ReadableStream({
+        start(controller) {
+          const send = (event) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          send({ type: "response.output_item.added", item, output_index: 0 });
+          finishResponse = () => {
+            send({
+              type: "response.output_text.delta",
+              item_id: item.id,
+              delta: "Saved after leaving the chat.",
+            });
+            send({ type: "response.output_item.done", item, output_index: 0 });
+            send({
+              type: "response.completed",
+              response: { usage: { input_tokens: 5, output_tokens: 7 } },
+            });
+            controller.close();
+          };
+          providerSignal.addEventListener("abort", () => controller.error(providerSignal.reason), {
+            once: true,
+          });
+        },
+      });
+      return new Response(body, { headers: { "Content-Type": "text/event-stream" } });
+    };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  async function start(generationId, signal) {
+    const response = await app.request(`${path}/completion`, {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "application/json" },
+      signal,
+      body: JSON.stringify({
+        model: "gpt-6.1-terra",
+        generationId,
+        messages: [{ id: "first", role: "user", content: "Hello" }],
+      }),
+    });
+    expect(response.status).toBe(200);
+    return response;
+  }
+
+  test("continues without a browser connection and saves the answer for reopening", async () => {
+    const generationId = crypto.randomUUID();
+    const connection = new AbortController();
+    const response = await start(generationId, connection.signal);
+    const reader = response.body.getReader();
+    await reader.read();
+    const chat = await makeRequest(app, "GET", path, { cookie });
+    expect((await chat.json()).generationId).toBe(generationId);
+    connection.abort();
+    await reader.cancel();
+
+    expect(providerSignal.aborted).toBe(false);
+    finishResponse();
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const detail = await makeRequest(app, "GET", path, { cookie });
+      if ((await detail.json()).generationId === null) break;
+      await Bun.sleep(5);
+    }
+    const result = await makeRequest(app, "GET", `${path}/messages?latest=1`, { cookie });
+    expect((await result.json()).messages).toEqual([
+      expect.objectContaining({
+        role: "assistant",
+        content: "Saved after leaving the chat.",
+        metadata: expect.objectContaining({
+          stats: expect.objectContaining({ inputTokens: 5, outputTokens: 7 }),
+        }),
+      }),
+    ]);
+  });
+
+  test("only the owner can stop the current generation after reopening", async () => {
+    const generationId = crypto.randomUUID();
+    const response = await start(generationId);
+    await response.body.getReader().read();
+    const forbidden = await makeRequest(app, "DELETE", `${path}/completion/${generationId}`, {
+      cookie: memberCookie,
+    });
+    expect(forbidden.status).toBe(404);
+    const stale = await makeRequest(app, "DELETE", `${path}/completion/${crypto.randomUUID()}`, {
+      cookie,
+    });
+    expect(stale.status).toBe(200);
+    expect(providerSignal.aborted).toBe(false);
+    const stopped = await makeRequest(app, "DELETE", `${path}/completion/${generationId}`, {
+      cookie,
+    });
+    expect(stopped.status).toBe(200);
+    expect(providerSignal.aborted).toBe(true);
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const detail = await makeRequest(app, "GET", path, { cookie });
+      if ((await detail.json()).generationId === null) return;
+      await Bun.sleep(5);
+    }
+    throw new Error("Stopped completion was not cleared");
+  });
+});
+
 test("generated files are copied once, saved with the reply, and downloadable without OpenAI", async () => {
   resetDatabase();
   const app = createTestApp();
@@ -193,7 +324,7 @@ test("generated files are copied once, saved with the reply, and downloadable wi
     });
   };
 
-  const reply = { id: "generated-reply", role: "assistant", content: "파일을 생성했습니다." };
+  const reply = { role: "assistant", content: "파일을 생성했습니다." };
   try {
     const completion = await makeRequest(app, "POST", `/api/chats/${chatId}/completion`, {
       cookie,
@@ -221,11 +352,6 @@ test("generated files are copied once, saved with the reply, and downloadable wi
     ]);
     globalThis.fetch = originalFetch;
 
-    const saved = await makeRequest(app, "POST", `/api/chats/${chatId}/messages`, {
-      cookie,
-      body: reply,
-    });
-    expect(saved.status).toBe(201);
     const history = await makeRequest(app, "GET", `/api/chats/${chatId}/messages`, { cookie });
     expect((await history.json()).messages).toEqual([expect.objectContaining(reply)]);
 

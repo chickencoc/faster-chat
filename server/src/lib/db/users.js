@@ -1,5 +1,16 @@
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { DB_CONSTANTS } from "@faster-chat/shared";
+
+const KST_OFFSET_MS = 9 * DB_CONSTANTS.MILLISECONDS_PER_HOUR;
+
+function nextKoreaMidnight(now) {
+  const day = DB_CONSTANTS.MILLISECONDS_PER_DAY;
+  return (Math.floor((now + KST_OFFSET_MS) / day) + 1) * day - KST_OFFSET_MS;
+}
+
+function digestSessionToken(token) {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 export function createUserUtils({ db }) {
   return {
@@ -27,37 +38,52 @@ export function createUserUtils({ db }) {
       return result.count;
     },
 
-    createSession(userId, expiresInMs = DB_CONSTANTS.DEFAULT_SESSION_EXPIRY_MS) {
+    createSession(userId) {
       const sessionId = randomBytes(DB_CONSTANTS.SESSION_ID_BYTES).toString("hex");
-      const expiresAt = Date.now() + expiresInMs;
+      const now = Date.now();
+      const expiresAt = nextKoreaMidnight(now);
 
       const stmt = db.prepare(
-        "INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)"
+        "INSERT INTO sessions (id, user_id, expires_at, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)"
       );
-      stmt.run(sessionId, userId, expiresAt, Date.now());
+      stmt.run(digestSessionToken(sessionId), userId, expiresAt, now, now);
 
       return { sessionId, expiresAt };
     },
 
-    getSession(sessionId) {
+    getSession(sessionId, { touch = false } = {}) {
+      const now = Date.now();
+      const digest = digestSessionToken(sessionId);
       const stmt = db.prepare(`
       SELECT
-        s.id as session_id,
         s.user_id,
         s.expires_at,
+        s.last_seen_at,
         u.username,
         u.email,
         u.role
       FROM sessions s
       JOIN users u ON s.user_id = u.id
-      WHERE s.id = ? AND s.expires_at > ?
+      WHERE s.id = ? AND s.expires_at > ? AND s.last_seen_at > ?
     `);
-      return stmt.get(sessionId, Date.now());
+      const session = stmt.get(digest, now, now - DB_CONSTANTS.SESSION_IDLE_TIMEOUT_MS);
+      if (
+        touch &&
+        session &&
+        now - session.last_seen_at >= DB_CONSTANTS.SESSION_TOUCH_INTERVAL_MS
+      ) {
+        db.prepare("UPDATE sessions SET last_seen_at = ? WHERE id = ? AND last_seen_at < ?").run(
+          now,
+          digest,
+          now
+        );
+      }
+      return session;
     },
 
     deleteSession(sessionId) {
       const stmt = db.prepare("DELETE FROM sessions WHERE id = ?");
-      stmt.run(sessionId);
+      stmt.run(digestSessionToken(sessionId));
     },
 
     deleteUserSessions(userId) {
@@ -66,8 +92,9 @@ export function createUserUtils({ db }) {
     },
 
     cleanExpiredSessions() {
-      const stmt = db.prepare("DELETE FROM sessions WHERE expires_at <= ?");
-      const result = stmt.run(Date.now());
+      const now = Date.now();
+      const stmt = db.prepare("DELETE FROM sessions WHERE expires_at <= ? OR last_seen_at <= ?");
+      const result = stmt.run(now, now - DB_CONSTANTS.SESSION_IDLE_TIMEOUT_MS);
       return result.changes;
     },
 

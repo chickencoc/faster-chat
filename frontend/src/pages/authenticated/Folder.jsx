@@ -79,9 +79,9 @@ const FolderHeader = ({ folder, onUpdate, onDelete, onToggleSidebar, sidebarColl
       }
       await onUpdate(updates);
       setIsEditing(false);
-      toast.success("Folder updated");
+      toast.success("Project updated");
     } catch (err) {
-      toast.error(err.message || "Failed to update folder");
+      toast.error(err.message || "Failed to update project");
     }
   };
 
@@ -91,9 +91,9 @@ const FolderHeader = ({ folder, onUpdate, onDelete, onToggleSidebar, sidebarColl
     }
     try {
       await onDelete();
-      toast.success("Folder deleted");
+      toast.success("Project deleted");
     } catch (err) {
-      toast.error(err.message || "Failed to delete folder");
+      toast.error(err.message || "Failed to delete project");
     }
   };
 
@@ -186,13 +186,13 @@ const FolderHeader = ({ folder, onUpdate, onDelete, onToggleSidebar, sidebarColl
               setIsEditing(true);
             }}
             className="text-theme-text-muted hover:text-theme-text hover:bg-theme-surface ease-snappy rounded-lg p-2 transition-colors"
-            title="Edit folder">
+            title="Edit project">
             <Pencil size={16} />
           </button>
           <button
             onClick={handleDelete}
             className="text-theme-text-muted ease-snappy rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
-            title="Delete folder">
+            title="Delete project">
             <Trash2 size={16} />
           </button>
         </div>
@@ -259,7 +259,7 @@ export default function Folder({ folderId }) {
   if (!folder) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
-        <h2 className="text-theme-text text-xl font-medium">Folder not found</h2>
+        <h2 className="text-theme-text text-xl font-medium">Project not found</h2>
         <button
           onClick={() => navigate({ to: "/" })}
           className="text-theme-primary hover:underline">
