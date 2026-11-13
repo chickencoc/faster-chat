@@ -49,13 +49,45 @@ describe("invite links", () => {
     expect(check.status).toBe(200);
     expect((await check.json()).valid).toBe(true);
 
+    const registration = {
+      username: "invitee",
+      password: "inviteepass123",
+      inviteToken: invite.token,
+    };
+    for (const email of [undefined, "invalid"]) {
+      const rejected = await makeRequest(app, "POST", "/api/auth/register", {
+        body: { ...registration, email },
+      });
+      expect(rejected.status).toBe(400);
+    }
     const register = await makeRequest(app, "POST", "/api/auth/register", {
-      body: { username: "invitee", password: "inviteepass123", inviteToken: invite.token },
+      body: { ...registration, email: " invitee@example.com " },
     });
     expect(register.status).toBe(201);
     const data = await register.json();
     expect(data.user.role).toBe("member");
+    expect(data.user.email).toBe("invitee@example.com");
     expect(register.headers.get("set-cookie")).toContain("session=");
+
+    const memberCookie = register.headers.get("set-cookie").split(";")[0];
+    const change = await makeRequest(app, "PUT", "/api/auth/email", {
+      cookie: memberCookie,
+      body: { id: 1, email: "updated@example.com" },
+    });
+    expect(change.status).toBe(200);
+    expect((await change.json()).user.email).toBe("updated@example.com");
+
+    const session = await makeRequest(app, "GET", "/api/auth/session", { cookie: memberCookie });
+    expect((await session.json()).user.email).toBe("updated@example.com");
+    const adminSession = await makeRequest(app, "GET", "/api/auth/session", {
+      cookie: adminCookie,
+    });
+    expect((await adminSession.json()).user.email).toBeNull();
+
+    const unauthorized = await makeRequest(app, "PUT", "/api/auth/email", {
+      body: { email: "unauthorized@example.com" },
+    });
+    expect(unauthorized.status).toBe(401);
 
     const reuse = await makeRequest(app, "POST", "/api/auth/register", {
       body: { username: "invitee2", password: "inviteepass123", inviteToken: invite.token },

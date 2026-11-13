@@ -3,6 +3,8 @@ import { FILE_CONSTANTS, formatFileSize } from "@faster-chat/shared";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/api";
 
+const UPLOAD_TOO_LARGE_MESSAGE = "파일 업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+
 async function uploadFile(file) {
   const formData = new FormData();
   formData.append("file", file);
@@ -11,11 +13,12 @@ async function uploadFile(file) {
     credentials: "include",
     body: formData,
   });
+  if (response.status === 413) {
+    throw new Error(UPLOAD_TOO_LARGE_MESSAGE);
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    const fallback =
-      response.status === 413 ? "File exceeds the server upload limit" : "Upload failed";
-    throw new Error(data?.error || `${fallback} (HTTP ${response.status})`);
+    throw new Error(data?.error || `Upload failed (HTTP ${response.status})`);
   }
   if (!data?.id) {
     throw new Error(`Invalid upload response (HTTP ${response.status})`);
@@ -54,11 +57,16 @@ export function useFileUploader({ onFilesUploaded } = {}) {
 
     const results = await Promise.allSettled(uploadable.map(uploadFile));
     const uploaded = [];
+    let rejectedForSize = false;
     results.forEach((r, i) => {
       if (r.status === "fulfilled" && r.value) {
         uploaded.push(r.value);
       } else if (r.status === "rejected") {
-        errors.push(`${uploadable[i].name}: ${r.reason?.message ?? "Upload failed"}`);
+        if (r.reason?.message === UPLOAD_TOO_LARGE_MESSAGE) {
+          rejectedForSize = true;
+        } else {
+          errors.push(`${uploadable[i].name}: ${r.reason?.message ?? "Upload failed"}`);
+        }
       }
     });
 
@@ -69,7 +77,9 @@ export function useFileUploader({ onFilesUploaded } = {}) {
       onFilesUploaded?.(uploaded);
       toast.success(uploaded.length === 1 ? "File uploaded" : `${uploaded.length} files uploaded`);
     }
-    if (errors.length > 0) {
+    if (rejectedForSize) {
+      toast.error(UPLOAD_TOO_LARGE_MESSAGE);
+    } else if (errors.length > 0) {
       toast.error("Upload failed", { description: errors[0] });
     }
   }

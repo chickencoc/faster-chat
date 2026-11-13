@@ -22,6 +22,7 @@ const AuthPage = ({ inviteToken }) => {
   const [isLogin, setIsLogin] = useState(!inviteToken);
   const showRegister = !isLogin && canRegister;
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -41,7 +42,7 @@ const AuthPage = ({ inviteToken }) => {
           setValidationError("Passwords do not match");
           return;
         }
-        await register(username, password, inviteToken);
+        await register(username, password, inviteToken, hasInvite ? email.trim() : undefined);
       }
     } catch (err) {
       console.error("Auth error:", err);
@@ -90,6 +91,27 @@ const AuthPage = ({ inviteToken }) => {
                 disabled={isLoading}
               />
             </div>
+
+            {showRegister && hasInvite && (
+              <div>
+                <label
+                  htmlFor="invite-email"
+                  className="text-theme-text-subtle mb-1 block text-sm font-medium">
+                  Email
+                </label>
+                <input
+                  id="invite-email"
+                  type="email"
+                  value={email}
+                  onInput={(e) => setEmail(e.currentTarget.value)}
+                  required
+                  maxLength={254}
+                  autoComplete="email"
+                  className="border-theme-border bg-theme-canvas text-theme-text focus:border-theme-primary focus:ring-theme-primary w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-none disabled:opacity-60"
+                  disabled={isLoading}
+                />
+              </div>
+            )}
 
             <div>
               <label
@@ -170,7 +192,7 @@ const AuthPage = ({ inviteToken }) => {
         {showRegister && hasInvite && (
           <div className="bg-theme-surface/50 text-theme-text-muted mt-4 rounded-md p-4 text-sm">
             <p className="font-semibold">You've been invited</p>
-            <p className="mt-1">Pick a username and password to create your account.</p>
+            <p className="mt-1">Enter your username, email, and password to create your account.</p>
           </div>
         )}
       </div>

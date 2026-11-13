@@ -13,11 +13,11 @@ export function createUserUtils({ db }) {
       return stmt.get(userId);
     },
 
-    createUser(username, passwordHash, role = "member", createdBy = null) {
+    createUser(username, passwordHash, role = "member", createdBy = null, email = null) {
       const stmt = db.prepare(
-        "INSERT INTO users (username, password_hash, role, created_at, created_by) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO users (username, password_hash, role, created_at, created_by, email) VALUES (?, ?, ?, ?, ?, ?)"
       );
-      const result = stmt.run(username, passwordHash, role, Date.now(), createdBy);
+      const result = stmt.run(username, passwordHash, role, Date.now(), createdBy, email);
       return result.lastInsertRowid;
     },
 
@@ -46,6 +46,7 @@ export function createUserUtils({ db }) {
         s.user_id,
         s.expires_at,
         u.username,
+        u.email,
         u.role
       FROM sessions s
       JOIN users u ON s.user_id = u.id
@@ -85,6 +86,11 @@ export function createUserUtils({ db }) {
     updateUserRole(userId, role) {
       const stmt = db.prepare("UPDATE users SET role = ? WHERE id = ?");
       stmt.run(role, userId);
+    },
+
+    updateUserEmail(userId, email) {
+      const stmt = db.prepare("UPDATE users SET email = ? WHERE id = ?");
+      stmt.run(email, userId);
     },
 
     updateUserPassword(userId, passwordHash) {

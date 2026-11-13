@@ -167,7 +167,7 @@ const CodeBlock = ({ inline, className, children, node }) => {
       ) : (
         <pre
           className={`p-4 text-sm ${lineNumbersClass} ${wrap ? "break-words whitespace-pre-wrap" : "overflow-x-auto"}`}>
-          <code className="text-theme-text-muted">
+          <code className="text-theme-text">
             {fallbackLines.map((line, i) => (
               <span key={i} className="line">
                 {line}

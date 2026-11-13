@@ -10,6 +10,7 @@ import { migration as addModelImageToImage } from "./009_add_model_image_to_imag
 import { migration as disableRemovedProviders } from "./010_disable_removed_providers.js";
 import { migration as hideEmptyChats } from "./011_hide_empty_chats.js";
 import { migration as chatModelSettings } from "./012_chat_model_settings.js";
+import { migration as userEmail } from "./013_user_email.js";
 
 export const migrations = [
   initialSchema,
@@ -24,4 +25,5 @@ export const migrations = [
   disableRemovedProviders,
   hideEmptyChats,
   chatModelSettings,
+  userEmail,
 ];

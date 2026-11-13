@@ -1,10 +1,17 @@
 import { apiFetch } from "@/lib/api";
 
 export const authClient = {
-  async register(username, password, inviteToken) {
+  async register(username, password, inviteToken, email) {
     return apiFetch("/api/auth/register", {
       method: "POST",
-      body: JSON.stringify({ username, password, inviteToken }),
+      body: JSON.stringify({ username, password, inviteToken, email }),
+    });
+  },
+
+  async updateEmail(email) {
+    return apiFetch("/api/auth/email", {
+      method: "PUT",
+      body: JSON.stringify({ email }),
     });
   },
 

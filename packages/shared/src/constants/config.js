@@ -12,7 +12,7 @@ export const TIMEOUTS = {
 
 /** Cache Duration Values (in milliseconds) */
 export const CACHE_DURATIONS = {
-  MODELS_DEV: 60 * 60 * 1000, // 1 hour - Cache models.dev database
+  MODELS_DEV: 24 * 60 * 60 * 1000, // One day for the models.dev midnight refresh
   PROVIDER_LIST: 60 * 60 * 1000, // 1 hour - Cache available providers list
   IMAGE_MODELS: 5 * 60 * 1000, // 5 minutes - Cache image model list
 };

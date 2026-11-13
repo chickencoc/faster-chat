@@ -7,7 +7,12 @@ import { TIMEOUTS, CACHE_DURATIONS, PROVIDERS } from "@faster-chat/shared";
 
 let cachedDatabase = null;
 let lastFetchTime = null;
-const CACHE_DURATION = CACHE_DURATIONS.MODELS_DEV;
+const DAY_MS = CACHE_DURATIONS.MODELS_DEV;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+function koreaDay(timestamp) {
+  return Math.floor((timestamp + KST_OFFSET_MS) / DAY_MS);
+}
 const OPENAI_IMAGE_MODELS = {
   "gpt-image-2.6-flare": "GPT Image 2.6 Flare",
   "gpt-image-2.6-sunburst": "GPT Image 2.6 Sunburst",
@@ -15,13 +20,13 @@ const OPENAI_IMAGE_MODELS = {
 
 /**
  * Fetch the models.dev database
- * Caches in memory for 1 hour
+ * Caches in memory until the next midnight in Korea.
  */
 export async function fetchModelsDevDatabase() {
   const now = Date.now();
 
   // Return cached if still valid
-  if (cachedDatabase && lastFetchTime && now - lastFetchTime < CACHE_DURATION) {
+  if (cachedDatabase && koreaDay(now) === koreaDay(lastFetchTime)) {
     return cachedDatabase;
   }
 
@@ -167,9 +172,19 @@ export function initializeModelsDevCache() {
   return initPromise;
 }
 
-const refreshHandle = setInterval(() => {
-  fetchModelsDevDatabase().catch((error) => {
-    console.error("Failed to refresh models.dev cache:", error.message);
-  });
-}, CACHE_DURATION);
-refreshHandle.unref?.();
+function scheduleMidnightRefresh() {
+  const now = Date.now();
+  const nextMidnight = (koreaDay(now) + 1) * DAY_MS - KST_OFFSET_MS;
+  const handle = setTimeout(async () => {
+    try {
+      await fetchModelsDevDatabase();
+    } catch (error) {
+      console.error("Failed to refresh models.dev cache:", error.message);
+    } finally {
+      scheduleMidnightRefresh();
+    }
+  }, nextMidnight - now);
+  handle.unref?.();
+}
+
+scheduleMidnightRefresh();

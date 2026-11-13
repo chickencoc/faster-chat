@@ -5,6 +5,7 @@ import { FontSelector } from "@/components/settings/FontSelector";
 import { ThemeSelector } from "@/components/settings/ThemeSelector";
 import { useThemeStore } from "@/state/useThemeStore";
 import { Switch } from "@/components/ui/Switch";
+import AccountEmail from "@/components/settings/AccountEmail";
 import { KEYBOARD_SHORTCUTS } from "@faster-chat/shared";
 import { LayoutGrid, Keyboard } from "lucide-preact";
 
@@ -61,11 +62,12 @@ const Settings = () => {
           {/* Account Information */}
           <div className="border-theme-surface bg-theme-canvas-alt rounded-lg border p-6">
             <h2 className="text-theme-text text-lg font-semibold">Account Information</h2>
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-theme-text-muted text-sm font-medium">Username</label>
                 <p className="text-theme-text mt-1">{user?.username}</p>
               </div>
+              <AccountEmail email={user?.email} />
               <div>
                 <label className="text-theme-text-muted text-sm font-medium">Role</label>
                 <p className="mt-1">

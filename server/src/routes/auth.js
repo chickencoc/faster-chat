@@ -11,10 +11,13 @@ import { ensureSession } from "../middleware/auth.js";
 export const authRouter = new Hono();
 
 // Validation schemas
+const EmailSchema = z.string().trim().max(254).email("Enter a valid email address");
+
 const RegisterSchema = z.object({
   username: z.string().min(3).max(50),
   password: z.string().min(8).max(100),
   inviteToken: z.string().optional(),
+  email: EmailSchema.optional(),
 });
 
 const LoginSchema = z.object({
@@ -50,7 +53,7 @@ authRouter.post("/register", async (c) => {
   }
 
   const body = await c.req.json();
-  const { username, password, inviteToken } = RegisterSchema.parse(body);
+  const { username, password, inviteToken, email } = RegisterSchema.parse(body);
 
   if (!checkRateLimit(`register:user:${username.toLowerCase()}`)) {
     return c.json({ error: "Too many attempts for this username." }, HTTP_STATUS.TOO_MANY_REQUESTS);
@@ -66,6 +69,9 @@ authRouter.post("/register", async (c) => {
     if (!invite) {
       return c.json({ error: AUTH.INVITE_INVALID_MESSAGE }, HTTP_STATUS.FORBIDDEN);
     }
+    if (!email) {
+      return c.json({ error: "Email is required" }, HTTP_STATUS.BAD_REQUEST);
+    }
   }
 
   // Check if username already exists
@@ -80,7 +86,13 @@ authRouter.post("/register", async (c) => {
   const passwordHash = await hashPassword(password);
 
   // Create user; registration opens a session, so it counts as activity
-  const userId = dbUtils.createUser(username, passwordHash, role, invite?.created_by ?? null);
+  const userId = dbUtils.createUser(
+    username,
+    passwordHash,
+    role,
+    invite?.created_by ?? null,
+    email
+  );
   dbUtils.updateLastActive(userId);
 
   if (invite) {
@@ -107,6 +119,7 @@ authRouter.post("/register", async (c) => {
       user: {
         id: userId,
         username,
+        email: email ?? null,
         role,
       },
       session: {
@@ -172,6 +185,7 @@ authRouter.post("/login", async (c) => {
     user: {
       id: user.id,
       username: user.username,
+      email: user.email,
       role: user.role,
     },
     session: {
@@ -233,12 +247,20 @@ authRouter.get("/session", async (c) => {
     user: {
       id: session.user_id,
       username: session.username,
+      email: session.email,
       role: session.role,
     },
     session: {
       expiresAt: session.expires_at,
     },
   });
+});
+
+authRouter.put("/email", ensureSession, async (c) => {
+  const user = c.get("user");
+  const { email } = z.object({ email: EmailSchema }).parse(await c.req.json());
+  dbUtils.updateUserEmail(user.id, email);
+  return c.json({ user: { ...user, email } });
 });
 
 authRouter.put("/change-password", ensureSession, async (c) => {
