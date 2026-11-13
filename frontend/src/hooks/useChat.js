@@ -2,16 +2,26 @@ import { extractTextContent } from "@/lib/messageUtils";
 import { useState } from "preact/hooks";
 import { useChatPersistence } from "./useChatPersistence";
 import { useChatStream } from "./useChatStream";
+import { useDeleteMessageMutation } from "./useChatsQuery";
 
-export function useChat({ id: chatId, model, webSearchEnabled, memoryEnabled }) {
+export function useChat({
+  id: chatId,
+  model,
+  reasoningEffort,
+  imageGenerationModel,
+  webSearchEnabled,
+  memoryEnabled,
+}) {
   const [input, setInput] = useState("");
   const [inputFiles, setInputFiles] = useState([]);
+  const deleteMessage = useDeleteMessageMutation();
 
   const {
     chat,
     messages: persistedMessages,
     isChatLoading,
     isChatError,
+    isSaving,
     saveUserMessage,
     saveAssistantMessage,
   } = useChatPersistence(chatId);
@@ -19,12 +29,21 @@ export function useChat({ id: chatId, model, webSearchEnabled, memoryEnabled }) 
   const stream = useChatStream({
     chatId,
     model,
+    reasoningEffort,
+    imageGenerationModel,
     webSearchEnabled,
     memoryEnabled,
     persistedMessages,
-    onMessageComplete: async ({ id, content, metadata, createdAt }) => {
+    onMessageComplete: async ({ id, replacedMessageId, content, fileIds, metadata, createdAt }) => {
       if (chatId) {
-        await saveAssistantMessage({ id, content, model, metadata, createdAt }, chatId);
+        try {
+          await saveAssistantMessage({ id, content, model, fileIds, metadata, createdAt }, chatId);
+          if (replacedMessageId) {
+            await deleteMessage.mutateAsync({ chatId, messageId: replacedMessageId });
+          }
+        } catch (err) {
+          console.error("Failed to save response", err);
+        }
       }
     },
   });
@@ -51,16 +70,16 @@ export function useChat({ id: chatId, model, webSearchEnabled, memoryEnabled }) 
     }
   }
 
-  function handleSubmit(e) {
+  function handleSubmit(e, content = input) {
     e.preventDefault();
-    submitMessage({ content: input, fileIds: inputFiles.map((f) => f.id) });
+    return submitMessage({ content, fileIds: inputFiles.map((f) => f.id) });
   }
 
   function handleInputChange(e) {
     setInput(e.target.value);
   }
 
-  const isLoading = (chatId && isChatLoading) || stream.isStreaming;
+  const isLoading = (chatId && isChatLoading) || isSaving || stream.isStreaming;
 
   const appendFiles = (files) => setInputFiles((prev) => [...prev, ...files]);
   const removeFile = (fileId) => setInputFiles((prev) => prev.filter((f) => f.id !== fileId));

@@ -66,7 +66,7 @@ const UsersTab = () => {
               placeholder="Search"
               value={searchQuery}
               onInput={(e) => setSearchQuery(e.target.value)}
-              className="border-theme-surface-strong bg-theme-canvas text-theme-text placeholder-theme-text-muted focus:border-theme-blue w-64 rounded-lg border px-4 py-2 text-sm focus:outline-none"
+              className="border-theme-surface-strong bg-theme-canvas text-theme-text placeholder-theme-text-muted focus:border-theme-primary w-64 rounded-lg border px-4 py-2 text-sm focus:outline-none"
             />
             <svg
               className="text-theme-text-muted absolute top-2.5 right-3 h-5 w-5"
@@ -83,7 +83,7 @@ const UsersTab = () => {
           </div>
           <Button
             onClick={() => setCreateModalOpen(true)}
-            color="blue"
+            color="theme"
             className="flex items-center gap-2">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -136,7 +136,7 @@ const UsersTab = () => {
                     <span
                       className={`inline-flex rounded-md px-2 py-1 text-xs font-medium uppercase ${
                         user.role === "admin"
-                          ? "bg-theme-blue/10 text-theme-blue"
+                          ? "bg-theme-primary/10 text-theme-primary"
                           : "bg-theme-green/10 text-theme-green"
                       }`}>
                       {user.role}

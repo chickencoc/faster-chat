@@ -111,6 +111,17 @@ export function createChatUtils({ db }) {
       stmt.run(timestamp, chatId);
     },
 
+    updateChatModelSettings(chatId, userId, model, effort = null, type = "text") {
+      const stmt = db.prepare(
+        type === "image"
+          ? `UPDATE chats SET last_image_model = ?, image_complexity = ?
+             WHERE id = ? AND user_id = ? AND deleted_at IS NULL`
+          : `UPDATE chats SET last_model = ?, reasoning_effort = ?
+             WHERE id = ? AND user_id = ? AND deleted_at IS NULL`
+      );
+      stmt.run(model, effort, chatId, userId);
+    },
+
     softDeleteChatByUser(chatId, userId) {
       const now = Date.now();
       const stmt = db.prepare(

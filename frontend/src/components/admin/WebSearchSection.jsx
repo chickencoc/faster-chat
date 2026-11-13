@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { ICON_SIZE, UI_CONSTANTS } from "@faster-chat/shared";
 
 const inputClass =
-  "border-theme-surface-strong bg-theme-canvas text-theme-text placeholder-theme-text-muted focus:border-theme-blue w-full rounded-lg border px-4 py-2 text-sm focus:outline-none";
+  "border-theme-surface-strong bg-theme-canvas text-theme-text placeholder-theme-text-muted focus:border-theme-primary w-full rounded-lg border px-4 py-2 text-sm focus:outline-none";
 
 const WebSearchSection = () => {
   const queryClient = useQueryClient();
@@ -52,7 +52,7 @@ const WebSearchSection = () => {
             <Button
               onClick={() => braveKeyMutation.mutate(braveKey)}
               disabled={!braveKey || braveKeyMutation.isPending}
-              color="blue">
+              color="theme">
               {braveKeyMutation.isPending ? (
                 "Saving..."
               ) : braveStatus === "success" ? (

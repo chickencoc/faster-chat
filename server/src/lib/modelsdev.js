@@ -3,17 +3,15 @@
  * https://models.dev/api.json
  */
 
-import {
-  TIMEOUTS,
-  CACHE_DURATIONS,
-  categorizeProvider,
-  requiresBaseUrl as checkRequiresBaseUrl,
-} from "@faster-chat/shared";
+import { TIMEOUTS, CACHE_DURATIONS, PROVIDERS } from "@faster-chat/shared";
 
 let cachedDatabase = null;
 let lastFetchTime = null;
 const CACHE_DURATION = CACHE_DURATIONS.MODELS_DEV;
-const OPENROUTER_IMAGE_MODELS = new Set(["openai/gpt-image-1", "openai/gpt-5-image"]);
+const OPENAI_IMAGE_MODELS = {
+  "gpt-image-2.6-flare": "GPT Image 2.6 Flare",
+  "gpt-image-2.6-sunburst": "GPT Image 2.6 Sunburst",
+};
 
 /**
  * Fetch the models.dev database
@@ -40,7 +38,10 @@ export async function fetchModelsDevDatabase() {
       throw new Error(`Failed to fetch models.dev: ${response.status}`);
     }
 
-    cachedDatabase = await response.json();
+    const database = await response.json();
+    cachedDatabase = Object.fromEntries(
+      Object.entries(database).filter(([id]) => PROVIDERS[id]?.type === "official")
+    );
     lastFetchTime = now;
     console.log(`Loaded ${Object.keys(cachedDatabase).length} providers from models.dev`);
 
@@ -71,138 +72,6 @@ export async function getProviderInfo(providerName) {
   return db[providerName] || null;
 }
 
-/**
- * Get all available providers grouped by category
- */
-export async function getAvailableProviders() {
-  const db = await fetchModelsDevDatabase();
-
-  const providers = Object.entries(db).map(([id, info]) => ({
-    id,
-    name: info.name,
-    displayName: info.name,
-    description: getProviderDescription(id, info),
-    category: categorizeProvider(id),
-    env: info.env || [],
-    api: info.api,
-    npm: info.npm,
-    requiresBaseUrl: checkRequiresBaseUrl(id, info),
-    modelCount: Object.keys(info.models || {}).length,
-  }));
-
-  // Add manual providers that aren't in models.dev
-  // This includes local providers AND major providers like Anthropic
-  const manualProviders = [
-    {
-      id: "ollama",
-      name: "Ollama",
-      displayName: "Ollama",
-      description: "Local models via Ollama (dynamically fetched from your instance)",
-      category: "local",
-      env: [],
-      api: null,
-      npm: "@ai-sdk/openai-compatible",
-      requiresBaseUrl: true,
-      modelCount: 0,
-    },
-    {
-      id: "llama-cpp",
-      name: "llama.cpp",
-      displayName: "llama.cpp",
-      description: "Local models via llama.cpp server (OpenAI-compatible API)",
-      category: "local",
-      env: [],
-      api: null,
-      npm: "@ai-sdk/openai-compatible",
-      requiresBaseUrl: true,
-      modelCount: 0,
-    },
-    {
-      id: "llamafile",
-      name: "llamafile",
-      displayName: "llamafile",
-      description: "Single-file local LLM runtime",
-      category: "local",
-      env: [],
-      api: null,
-      npm: "@ai-sdk/openai-compatible",
-      requiresBaseUrl: true,
-      modelCount: 0,
-    },
-    {
-      id: "replicate",
-      name: "Replicate",
-      displayName: "Replicate",
-      description: "Image generation with Flux, Stable Diffusion, and more",
-      category: "community",
-      env: ["REPLICATE_API_TOKEN"],
-      api: "https://api.replicate.com/v1",
-      npm: "replicate",
-      requiresBaseUrl: false,
-      requiresApiKey: true,
-      modelCount: 4,
-      supportsImageGeneration: true,
-    },
-    {
-      id: "openrouter",
-      name: "OpenRouter",
-      displayName: "OpenRouter",
-      description: "Access 200+ models including image generation via unified API",
-      category: "community",
-      env: ["OPENROUTER_API_KEY"],
-      api: "https://openrouter.ai/api/v1",
-      npm: "@openrouter/ai-sdk-provider",
-      requiresBaseUrl: false,
-      requiresApiKey: true,
-      modelCount: 200,
-      supportsImageGeneration: true,
-    },
-  ];
-
-  // Add manual providers to the list
-  providers.push(...manualProviders);
-
-  // Sort: local first, then official, then community
-  const order = { local: 0, official: 1, community: 2 };
-  providers.sort((a, b) => {
-    const catDiff = order[a.category] - order[b.category];
-    if (catDiff !== 0) {
-      return catDiff;
-    }
-    return a.name.localeCompare(b.name);
-  });
-
-  return providers;
-}
-
-/**
- * Generate a description for a provider
- */
-function getProviderDescription(id, info) {
-  const modelCount = Object.keys(info.models || {}).length;
-
-  // Custom descriptions for known providers
-  const descriptions = {
-    ollama: "Local models via Ollama (dynamically fetched from your instance)",
-    openai: "GPT-4, GPT-4o, and other OpenAI models",
-    anthropic: "Claude 3.x and 4.x models",
-    "google-vertex": "Gemini models via Google Cloud Vertex AI",
-    google: "Gemini models via Google AI Studio",
-    "amazon-bedrock": "AWS Bedrock models (Claude, Llama, etc.)",
-    lmstudio: "Local models via LM Studio",
-    "llama-cpp": "Local models via llama.cpp server",
-    openrouter: "Access 100+ models through a unified API",
-    groq: "Ultra-fast inference with Llama, Mixtral, and more",
-  };
-
-  if (descriptions[id]) {
-    return descriptions[id];
-  }
-
-  // Generate generic description
-  return `${modelCount} model${modelCount !== 1 ? "s" : ""} available`;
-}
-
 function getModelType(modelData) {
   const outputModalities = modelData.modalities?.output || ["text"];
 
@@ -213,35 +82,20 @@ function getModelType(modelData) {
   return "text";
 }
 
-function coerceModelForProvider(providerName, modelId) {
-  if (providerName === "openrouter" && OPENROUTER_IMAGE_MODELS.has(modelId)) {
-    return {
-      model_type: "image",
-      output_modalities: ["image"],
-      metadataOverrides: {
-        supports_streaming: false,
-        supports_vision: true,
-      },
-    };
-  }
-  return null;
-}
-
 /**
  * Get models for a specific provider
  */
 export async function getModelsForProvider(providerName) {
   const providerInfo = await getProviderInfo(providerName);
-  if (!providerInfo || !providerInfo.models) {
+  if (!providerInfo?.models && providerName !== "openai") {
     return [];
   }
 
-  return Object.entries(providerInfo.models).map(([id, model]) => ({
+  const models = Object.entries(providerInfo?.models || {}).map(([id, model]) => ({
     model_id: id,
     display_name: model.name || id,
-    model_type: coerceModelForProvider(providerName, id)?.model_type || getModelType(model),
-    output_modalities: coerceModelForProvider(providerName, id)?.output_modalities ||
-      model.modalities?.output || ["text"],
+    model_type: getModelType(model),
+    output_modalities: model.modalities?.output || ["text"],
     enabled: !model.experimental && model.status !== "deprecated",
     metadata: {
       context_window: model.limit?.context || 0,
@@ -250,12 +104,8 @@ export async function getModelsForProvider(providerName) {
       output_price_per_1m: model.cost?.output || 0,
       cache_read_price_per_1m: model.cost?.cache_read || 0,
       cache_write_price_per_1m: model.cost?.cache_write || 0,
-      supports_streaming:
-        coerceModelForProvider(providerName, id)?.metadataOverrides?.supports_streaming ??
-        (model.modalities?.output || ["text"]).includes("text"),
-      supports_vision:
-        coerceModelForProvider(providerName, id)?.metadataOverrides?.supports_vision ??
-        (model.modalities?.input?.includes("image") || model.attachment),
+      supports_streaming: (model.modalities?.output || ["text"]).includes("text"),
+      supports_vision: model.modalities?.input?.includes("image") || model.attachment,
       supports_tools: model.tool_call !== false,
       supports_reasoning: model.reasoning || false,
       release_date: model.release_date,
@@ -264,6 +114,29 @@ export async function getModelsForProvider(providerName) {
       status: model.status,
     },
   }));
+
+  if (providerName === "openai") {
+    for (const [model_id, display_name] of Object.entries(OPENAI_IMAGE_MODELS)) {
+      if (models.some((model) => model.model_id === model_id)) {
+        continue;
+      }
+      models.push({
+        model_id,
+        display_name,
+        model_type: "image",
+        output_modalities: ["image"],
+        enabled: false,
+        metadata: {
+          supports_vision: true,
+          supports_tools: false,
+          supports_streaming: false,
+          supports_image_to_image: true,
+        },
+      });
+    }
+  }
+
+  return models;
 }
 
 let initPromise = null;

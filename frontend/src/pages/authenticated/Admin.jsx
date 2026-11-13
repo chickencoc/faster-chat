@@ -63,7 +63,7 @@ const Admin = () => {
                 onClick={() => handleTabChange(tab.id)}
                 className={`border-b-2 px-1 pt-4 pb-4 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? "border-theme-blue text-theme-text"
+                    ? "border-theme-primary text-theme-text"
                     : "text-theme-text-muted hover:text-theme-text-subtle border-transparent"
                 }`}>
                 {tab.label}

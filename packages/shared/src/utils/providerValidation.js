@@ -7,17 +7,9 @@
  * Lists of providers by category
  */
 export const PROVIDER_LISTS = {
-  LOCAL: ["ollama", "lmstudio", "llama-cpp", "llamafile"],
-  OFFICIAL: ["openai", "anthropic", "google", "cohere", "mistral", "azure", "google-vertex", "amazon-bedrock"],
-  OPENAI_COMPATIBLE: [
-    "ollama",
-    "lmstudio",
-    "llama-cpp",
-    "groq",
-    "openrouter",
-    "together",
-    "perplexity",
-  ],
+  LOCAL: ["ollama", "lmstudio", "llama-cpp", "llamafile", "omlx"],
+  OFFICIAL: ["openai", "anthropic", "google"],
+  OPENAI_COMPATIBLE: ["ollama", "lmstudio", "llama-cpp", "llamafile", "omlx"],
 };
 
 /**
@@ -96,7 +88,7 @@ export function getProviderType(providerId, providerInfo) {
   const id = providerId.toLowerCase();
 
   // Known official providers with native SDKs
-  if (id === "openai" || id === "anthropic") {
+  if (PROVIDER_LISTS.OFFICIAL.includes(id)) {
     return "official";
   }
 
@@ -189,11 +181,6 @@ export function getProviderBaseUrl(provider, isDev = false) {
   const id = (provider.id || provider.name || "").toLowerCase();
   if (localDefaults[id]) {
     return localDefaults[id];
-  }
-
-  // OpenRouter special case
-  if (id === "openrouter") {
-    return "https://openrouter.ai/api/v1";
   }
 
   return "";

@@ -2,6 +2,7 @@ import { Brain } from "lucide-preact";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useChatQuery } from "@/hooks/useChatsQuery";
 import { useMemoryStatus } from "@/hooks/useMemoryStatus";
+import { useUiState } from "@/state/useUiState";
 import { useAuthState } from "@/state/useAuthState";
 import { apiFetch } from "@/lib/api";
 import { chatKeys } from "@/hooks/queryKeys";
@@ -13,11 +14,17 @@ const ChatMemoryButton = ({ chatId, disabled }) => {
   const { data: chatData } = useChatQuery(chatId);
 
   const chatMemoryMutation = useMutation({
-    mutationFn: (nextDisabled) =>
-      apiFetch(`/api/chats/${chatId}/memory`, {
+    mutationFn: async (nextDisabled) => {
+      const draft = useUiState.getState().draftChat;
+      if (draft?.id === chatId && draft.userId === userId) {
+        useUiState.getState().setDraftChat({ ...draft, memoryDisabled: nextDisabled });
+        return { disabled: nextDisabled };
+      }
+      return apiFetch(`/api/chats/${chatId}/memory`, {
         method: "PUT",
         body: JSON.stringify({ disabled: nextDisabled }),
-      }),
+      });
+    },
     onMutate: async (nextDisabled) => {
       const queryKey = chatKeys.detail(userId, chatId);
       await queryClient.cancelQueries({ queryKey });

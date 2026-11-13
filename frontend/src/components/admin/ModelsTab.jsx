@@ -14,7 +14,6 @@ import {
   AlertTriangle,
   Database,
   Download,
-  ExternalLink,
 } from "lucide-preact";
 import { formatPrice, formatContextWindow } from "@faster-chat/shared";
 import { providersClient } from "@/lib/providersClient";
@@ -301,7 +300,7 @@ const ModelsTab = () => {
                       }}
                       disabled={bulkToggleMutation.isPending}
                       data-pending={bulkPendingProviderId === providerData.providerDbId}
-                      className={`text-theme-blue hover:bg-theme-blue/10 rounded px-2 py-1 text-[11px] font-semibold tracking-wide uppercase transition-colors ${
+                      className={`text-theme-primary hover:bg-theme-primary/10 rounded px-2 py-1 text-[11px] font-semibold tracking-wide uppercase transition-colors ${
                         bulkPendingProviderId === providerData.providerDbId ? "opacity-60" : ""
                       }`}>
                       Enable All
@@ -331,7 +330,7 @@ const ModelsTab = () => {
                                     onChange={(e) => setEditingName(e.target.value)}
                                     onKeyDown={(e) => handleKeyDown(e, model.id)}
                                     onBlur={() => saveEditing(model.id)}
-                                    className="border-theme-blue text-theme-text focus:ring-theme-blue rounded border px-2 py-1 text-sm font-semibold focus:ring-2 focus:outline-none"
+                                    className="border-theme-primary text-theme-text focus:ring-theme-primary rounded border px-2 py-1 text-sm font-semibold focus:ring-2 focus:outline-none"
                                     disabled={updateDisplayNameMutation.isPending}
                                   />
                                   <button
@@ -363,7 +362,7 @@ const ModelsTab = () => {
                                 </div>
                               )}
                               {model.is_default && (
-                                <span className="bg-theme-blue/10 text-theme-blue inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium">
+                                <span className="bg-theme-primary/10 text-theme-primary inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium">
                                   <Star className="h-3 w-3 fill-current" />
                                   Default
                                 </span>
@@ -376,24 +375,13 @@ const ModelsTab = () => {
                                   {formatContextWindow(model.metadata.context_window)} context
                                 </span>
                               )}
-                              {providerData.providerId === "replicate" ? (
-                                <a
-                                  href={`https://replicate.com/${model.model_id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="hover:text-theme-text inline-flex items-center gap-1 transition-colors duration-75">
-                                  <ExternalLink className="h-3 w-3" />
-                                  Pricing on Replicate
-                                </a>
-                              ) : (
-                                model.metadata?.input_price_per_1m !== undefined &&
+                              {model.metadata?.input_price_per_1m !== undefined &&
                                 model.metadata?.output_price_per_1m !== undefined && (
                                   <span title="Input / Output price per 1M tokens">
                                     {formatPrice(model.metadata.input_price_per_1m)}/
                                     {formatPrice(model.metadata.output_price_per_1m)} per 1M
                                   </span>
-                                )
-                              )}
+                                )}
                               {model.metadata?.cache_read_price_per_1m > 0 && (
                                 <span
                                   className="text-theme-green inline-flex items-center gap-1"
@@ -445,7 +433,7 @@ const ModelsTab = () => {
                               <button
                                 onClick={() => setDefaultMutation.mutate(model.id)}
                                 disabled={setDefaultMutation.isPending}
-                                className="text-theme-blue hover:bg-theme-blue/10 rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50">
+                                className="text-theme-primary hover:bg-theme-primary/10 rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50">
                                 Set Default
                               </button>
                             )}
@@ -464,14 +452,14 @@ const ModelsTab = () => {
                                     })
                                   }
                                   disabled={toggleImageToImageMutation.isPending}
-                                  className="h-3.5 w-3.5 accent-blue-500"
+                                  className="accent-theme-primary h-3.5 w-3.5"
                                 />
                                 Edit
                               </label>
                             )}
 
                             <Switch
-                              color="blue"
+                              color="theme"
                               value={model.enabled}
                               onChange={(enabled) =>
                                 toggleMutation.mutate({

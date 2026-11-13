@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/preact";
 import { toast } from "sonner";
 import InputArea from "@/components/chat/InputArea";
+import MessageSelection from "@/components/chat/MessageSelection";
 
 let mockUploadFiles = null;
 
@@ -277,6 +278,54 @@ describe("InputArea", () => {
     expect(fileInput.multiple).toBe(true);
   });
 
+  test("adds up to five quotes after pointer release and sends them with the draft", () => {
+    const messageListRef = { current: null };
+    render(
+      <>
+        <div ref={messageListRef}>
+          {Array.from({ length: 6 }, (_, index) => (
+            <p key={index} data-chat-message-text>{`Selected context ${index + 1}`}</p>
+          ))}
+        </div>
+        <MessageSelection chatId={defaultProps.chatId} messageListRef={messageListRef} />
+        <InputArea {...defaultProps} input="Explain this" />
+      </>
+    );
+
+    function selectContext(number) {
+      const paragraph = screen.getByText(`Selected context ${number}`, {
+        selector: "[data-chat-message-text]",
+      });
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      range.getBoundingClientRect = () => ({ left: 100, top: 100, width: 150, bottom: 120 });
+      fireEvent.pointerDown(paragraph);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+      fireEvent(document, new Event("selectionchange"));
+      expect(screen.queryByRole("button", { name: "채팅에 추가하기" })).toBeNull();
+      fireEvent.pointerUp(paragraph);
+      return screen.getByRole("button", { name: "채팅에 추가하기" });
+    }
+
+    for (let number = 1; number <= 5; number++) {
+      fireEvent.click(selectContext(number));
+      expect(screen.getByText(`선택한 텍스트 ${number}`)).toBeTruthy();
+    }
+    expect(selectContext(6).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "선택한 텍스트 2 제거" }));
+    fireEvent.click(selectContext(6));
+    expect(screen.getByLabelText("Message input").value).toBe("Explain this");
+
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    expect(defaultProps.handleSubmit).toHaveBeenCalledWith(
+      expect.anything(),
+      "> Selected context 1\n\n> Selected context 3\n\n> Selected context 4\n\n> Selected context 5\n\n> Selected context 6\n\nExplain this"
+    );
+    expect(screen.queryByText("선택한 텍스트 1")).toBeNull();
+  });
+
   describe("image-to-image reference attach", () => {
     test("image mode accepts image files only when the model supports editing", () => {
       mockImageMode = true;
@@ -460,9 +509,9 @@ describe("InputArea", () => {
       mockImageEnhance = true;
       render(<InputArea {...defaultProps} />);
 
-      fireEvent.change(screen.getByLabelText("Enhancement model"), {
-        target: { value: "gemini-flash" },
-      });
+      const select = screen.getByLabelText("Enhancement model");
+      select.value = "gemini-flash";
+      fireEvent(select, new Event("change", { bubbles: true }));
       expect(mockSetEnhanceModelId).toHaveBeenCalledWith("gemini-flash");
     });
 

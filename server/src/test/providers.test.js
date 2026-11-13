@@ -94,6 +94,33 @@ describe("provider routes", () => {
   });
 
   describe("POST /api/admin/providers", () => {
+    test("OpenAI exposes current image models when models.dev only lists text models", async () => {
+      const res = await makeRequest(app, "POST", "/api/admin/providers", {
+        body: {
+          name: "openai",
+          displayName: "OpenAI",
+          providerType: "official",
+          apiKey: "sk-openai-test-key",
+        },
+        cookie: adminCookie,
+      });
+      expect(res.status).toBe(201);
+
+      const modelsRes = await makeRequest(app, "GET", "/api/admin/models?type=image", {
+        cookie: adminCookie,
+      });
+      const { models } = await modelsRes.json();
+      const imageModels = models.filter((model) => model.provider === "openai");
+      expect(imageModels.map((model) => model.model_id).sort()).toEqual([
+        "gpt-image-2.6-flare",
+        "gpt-image-2.6-sunburst",
+      ]);
+      expect(imageModels.every((model) => !model.enabled)).toBe(true);
+      expect(imageModels.every((model) => model.metadata.supports_vision === 1)).toBe(true);
+      expect(imageModels.every((model) => model.metadata.supports_tools === 0)).toBe(true);
+      expect(imageModels.every((model) => model.metadata.supports_streaming === 0)).toBe(true);
+    });
+
     test("creates provider (returns 201)", async () => {
       const res = await makeRequest(app, "POST", "/api/admin/providers", {
         body: {
@@ -318,7 +345,7 @@ describe("provider routes", () => {
       expect(res.status).toBe(403);
     });
 
-    test("returns providers array for admin in local, official, community order", async () => {
+    test("returns only supported cloud and local providers", async () => {
       const res = await makeRequest(app, "GET", "/api/admin/providers/available", {
         cookie: adminCookie,
       });
@@ -330,15 +357,23 @@ describe("provider routes", () => {
       expect(data.providers.find((provider) => provider.id === "llama-cpp")?.category).toBe(
         "local"
       );
-      expect(data.providers.find((provider) => provider.id === "z-community")?.category).toBe(
-        "community"
+      expect(data.providers.map((provider) => provider.id).sort()).toEqual(
+        [
+          "openai",
+          "anthropic",
+          "google",
+          "ollama",
+          "lmstudio",
+          "llama-cpp",
+          "llamafile",
+          "omlx",
+        ].sort()
       );
       const kinds = data.providers.map((provider) => {
         const kind = provider.type ?? provider.category;
         return kind === "openai-compatible" ? "local" : kind;
       });
       expect(kinds.lastIndexOf("local")).toBeLessThan(kinds.indexOf("official"));
-      expect(kinds.lastIndexOf("official")).toBeLessThan(kinds.indexOf("community"));
     });
   });
 

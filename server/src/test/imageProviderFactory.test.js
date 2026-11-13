@@ -1,14 +1,4 @@
-import { describe, test, expect, afterEach, mock } from "bun:test";
-
-const replicateRuns = [];
-mock.module("replicate", () => ({
-  default: class {
-    async run(model, options) {
-      replicateRuns.push({ model, options });
-      return ["https://replicate.test/out.webp"];
-    }
-  },
-}));
+import { describe, test, expect, afterEach } from "bun:test";
 
 const { generateImageForProvider } = await import("../lib/imageProviderFactory.js?real");
 
@@ -113,6 +103,26 @@ describe("generateImageForProvider", () => {
   describe("openai", () => {
     const b64Response = { data: [{ b64_json: Buffer.from("img").toString("base64") }] };
 
+    test("defaults to GPT Image 2.6 Flare and generates a widescreen PNG", async () => {
+      const calls = stubFetch(200, b64Response);
+
+      const result = await generateImageForProvider("openai", "key", {
+        prompt: "a cube",
+        aspectRatio: "16:9",
+      });
+
+      expect(calls[0].url).toBe("https://api.openai.com/v1/images/generations");
+      expect(calls[0].body).toEqual({
+        model: "gpt-image-2.6-flare",
+        prompt: "a cube",
+        n: 1,
+        size: "1536x864",
+        output_format: "png",
+      });
+      expect(result.buffer.toString()).toBe("img");
+      expect(result.mimeType).toBe("image/png");
+    });
+
     test("gpt-image maps 3:2 to 1536x1024 without response_format", async () => {
       const calls = stubFetch(200, b64Response);
 
@@ -122,7 +132,13 @@ describe("generateImageForProvider", () => {
         model: "gpt-image-1",
       });
 
-      expect(calls[0].body).toEqual({ model: "gpt-image-1", prompt: "x", n: 1, size: "1536x1024" });
+      expect(calls[0].body).toEqual({
+        model: "gpt-image-1",
+        prompt: "x",
+        n: 1,
+        size: "1536x1024",
+        output_format: "png",
+      });
     });
 
     test("dall-e-3 maps 16:9 to 1792x1024 with b64 response_format", async () => {
@@ -150,26 +166,38 @@ describe("generateImageForProvider", () => {
       ).rejects.toThrow("not supported");
       expect(calls).toHaveLength(0);
     });
-  });
 
-  test("openrouter uses the Images API with aspect_ratio", async () => {
-    const calls = stubFetch(200, {
-      data: [{ b64_json: Buffer.from("img").toString("base64"), media_type: "image/webp" }],
-    });
+    test.each(["gpt-image-2.6-flare", "gpt-image-2.6-sunburst"])(
+      "%s generates a portrait PNG without legacy parameters",
+      async (model) => {
+        const calls = stubFetch(200, b64Response);
 
-    const result = await generateImageForProvider("openrouter", "key", {
-      prompt: "x",
-      aspectRatio: "4:3",
-      model: "google/nano-banana",
-    });
+        const result = await generateImageForProvider("openai", "key", {
+          prompt: "a cube",
+          aspectRatio: "3:4",
+          model,
+          complexity: "medium",
+        });
 
-    expect(calls[0].url).toBe("https://openrouter.ai/api/v1/images");
-    expect(calls[0].body).toEqual({
-      model: "google/nano-banana",
-      prompt: "x",
-      aspect_ratio: "4:3",
+        expect(calls[0].body).toEqual({
+          model,
+          prompt: "a cube",
+          n: 1,
+          size: "864x1152",
+          complexity: "medium",
+          output_format: "png",
+        });
+        expect(result.buffer.toString()).toBe("img");
+      }
+    );
+
+    test("reports a missing image response", async () => {
+      stubFetch(200, {});
+
+      await expect(
+        generateImageForProvider("openai", "key", { prompt: "x", aspectRatio: "1:1" })
+      ).rejects.toThrow("No image in response");
     });
-    expect(result.mimeType).toBe("image/webp");
   });
 
   test("unknown provider with a base URL uses OpenAI-compatible /images/generations", async () => {
@@ -187,16 +215,40 @@ describe("generateImageForProvider", () => {
     expect(calls[0].body).toEqual({ model: "sdxl", prompt: "x", n: 1, size: "1344x768" });
   });
 
-  test("replicate passes aspect_ratio through", async () => {
-    globalThis.fetch = async () =>
-      new Response("img", { headers: { "content-type": "image/webp" } });
-
-    await generateImageForProvider("replicate", "key", { prompt: "x", aspectRatio: "2:3" });
-
-    expect(replicateRuns.at(-1).options.input.aspect_ratio).toBe("2:3");
-  });
-
   describe("image-to-image edit branches", () => {
+    test.each(["gpt-image-2.6-flare", "gpt-image-2.6-sunburst"])(
+      "%s edits multiple references into a widescreen PNG",
+      async (model) => {
+        const calls = stubFetchRaw(200, {
+          data: [{ b64_json: Buffer.from("edited").toString("base64") }],
+        });
+
+        const result = await generateImageForProvider("openai", "key", {
+          prompt: "combine these images",
+          aspectRatio: "16:9",
+          model,
+          references: [ref("first"), ref("second", "image/jpeg")],
+          complexity: "high",
+        });
+
+        const [call] = calls;
+        expect(call.url).toBe("https://api.openai.com/v1/images/edits");
+        expect(call.init.headers.Authorization).toBe("Bearer key");
+        expect(call.init.headers["Content-Type"]).toBeUndefined();
+        expect(call.body.get("model")).toBe(model);
+        expect(call.body.get("size")).toBe("1536x864");
+        expect(call.body.get("output_format")).toBe("png");
+        expect(call.body.get("complexity")).toBe("high");
+        expect(call.body.has("response_format")).toBe(false);
+        const images = call.body.getAll("image[]");
+        expect(await images[0].text()).toBe("first");
+        expect(await images[1].text()).toBe("second");
+        expect(images[1].type).toBe("image/jpeg");
+        expect(result.buffer.toString()).toBe("edited");
+        expect(result.mimeType).toBe("image/png");
+      }
+    );
+
     test("google embeds reference inlineData parts before the text part", async () => {
       const calls = stubFetch(200, { candidates: [{ content: { parts: [imagePart("img")] } }] });
 
@@ -260,59 +312,6 @@ describe("generateImageForProvider", () => {
       expect(call.body.get("model")).toBe("sdxl");
       expect(call.body.get("size")).toBe("1344x768");
       expect(call.body.getAll("image[]")).toHaveLength(1);
-    });
-
-    test("openrouter adds input_references as image_url content parts", async () => {
-      const calls = stubFetch(200, {
-        data: [{ b64_json: Buffer.from("img").toString("base64"), media_type: "image/webp" }],
-      });
-
-      await generateImageForProvider("openrouter", "key", {
-        prompt: "a cube",
-        aspectRatio: "1:1",
-        model: "google/nano-banana",
-        references: [ref("ref1")],
-      });
-
-      const body = calls[0].body;
-      expect(body.input_references).toEqual([
-        {
-          type: "image_url",
-          image_url: { url: `data:image/png;base64,${Buffer.from("ref1").toString("base64")}` },
-        },
-      ]);
-      expect(body.prompt).toBe("a cube");
-    });
-
-    test("replicate passes the reference as an image data url input", async () => {
-      globalThis.fetch = async () =>
-        new Response("img", { headers: { "content-type": "image/webp" } });
-
-      await generateImageForProvider("replicate", "key", {
-        prompt: "a cube",
-        aspectRatio: "1:1",
-        model: "black-forest-labs/flux-1.1-pro",
-        references: [ref("ref1")],
-      });
-
-      const input = replicateRuns.at(-1).options.input;
-      expect(input.image).toBe(`data:image/png;base64,${Buffer.from("ref1").toString("base64")}`);
-    });
-
-    test("replicate passes multiple references as an image array", async () => {
-      globalThis.fetch = async () =>
-        new Response("img", { headers: { "content-type": "image/webp" } });
-
-      await generateImageForProvider("replicate", "key", {
-        prompt: "a cube",
-        references: [ref("ref1"), ref("ref2", "image/jpeg")],
-      });
-
-      const input = replicateRuns.at(-1).options.input;
-      expect(input.image).toEqual([
-        `data:image/png;base64,${Buffer.from("ref1").toString("base64")}`,
-        `data:image/jpeg;base64,${Buffer.from("ref2").toString("base64")}`,
-      ]);
     });
 
     test("no references leaves the google body unchanged", async () => {

@@ -1,14 +1,21 @@
 import ChatInterface from "@/components/chat/ChatInterface";
 import ErrorBanner from "@/components/ui/ErrorBanner";
-import { useChatNavigation } from "@/hooks/useChatNavigation";
+import { DRAFT_CHAT_ID, useChatNavigation } from "@/hooks/useChatNavigation";
 import { useChatQuery, useCreateChatMutation } from "@/hooks/useChatsQuery";
 import { useAppSettingsQuery } from "@/state/useAppSettings";
-import { useNavigate } from "@tanstack/react-router";
+import { useAuthState } from "@/state/useAuthState";
+import { useUiState } from "@/state/useUiState";
+import { Navigate, useNavigate } from "@tanstack/react-router";
 import { useLayoutEffect, useRef } from "preact/hooks";
 
-const Chat = ({ chatId }) => {
+const Chat = ({ chatId: routeChatId }) => {
   const navigate = useNavigate();
   const { navigateToChat } = useChatNavigation();
+  const userId = useAuthState((state) => state.user?.id);
+  const draftId = useUiState((state) =>
+    state.draftChat?.userId === userId ? state.draftChat?.id : null
+  );
+  const chatId = routeChatId === DRAFT_CHAT_ID ? draftId : routeChatId;
   const { data: chat, isLoading, isError, error } = useChatQuery(chatId);
   const createChatMutation = useCreateChatMutation();
   const { data: settings } = useAppSettingsQuery();
@@ -49,6 +56,10 @@ const Chat = ({ chatId }) => {
     );
   };
 
+  if (!chatId) {
+    return <Navigate to="/" replace />;
+  }
+
   if (isLoading || createChatMutation.isPending) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -85,7 +96,7 @@ const Chat = ({ chatId }) => {
     );
   }
 
-  return <ChatInterface chatId={chatId} />;
+  return <ChatInterface key={chatId} chatId={chatId} chat={chat} />;
 };
 
 export default Chat;

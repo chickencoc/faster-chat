@@ -1,26 +1,15 @@
 import { ASPECT_RATIO_SIZES, openAiSizeTable } from "@faster-chat/shared";
-import {
-  createReplicateClient,
-  generateImage as replicateGenerate,
-  downloadImage,
-} from "./imageGeneration.js";
 
 function toDataUrl(reference) {
   return `data:${reference.mimeType};base64,${reference.buffer.toString("base64")}`;
 }
 
 export async function generateImageForProvider(providerName, apiKey, options) {
-  const { prompt, aspectRatio, model, baseUrl, references } = options;
+  const { prompt, aspectRatio, model, baseUrl, references, complexity } = options;
 
   switch (providerName) {
-    case "replicate":
-      return generateWithReplicate(apiKey, { prompt, aspectRatio, model, references });
-
-    case "openrouter":
-      return generateWithOpenRouter(apiKey, { prompt, aspectRatio, model, references });
-
     case "openai":
-      return generateWithOpenAI(apiKey, { prompt, aspectRatio, model, references });
+      return generateWithOpenAI(apiKey, { prompt, aspectRatio, model, references, complexity });
 
     case "google":
       return generateWithGoogle(apiKey, { prompt, aspectRatio, model, references });
@@ -39,57 +28,8 @@ export async function generateImageForProvider(providerName, apiKey, options) {
   }
 }
 
-async function generateWithReplicate(apiKey, options) {
-  const { prompt, aspectRatio, model, references } = options;
-  const client = createReplicateClient(apiKey);
-  const extraInput = {};
-  if (references) {
-    const dataUrls = references.map(toDataUrl);
-    extraInput.image = dataUrls.length === 1 ? dataUrls[0] : dataUrls;
-  }
-  const urls = await replicateGenerate(client, { prompt, aspectRatio, model, extraInput });
-  const { buffer, mimeType } = await downloadImage(urls[0]);
-  return { buffer, mimeType, sourceUrl: urls[0] };
-}
-
-async function generateWithOpenRouter(apiKey, options) {
-  const { prompt, aspectRatio, model, references } = options;
-
-  const body = { model, prompt, aspect_ratio: aspectRatio };
-  if (references) {
-    body.input_references = references.map((reference) => ({
-      type: "image_url",
-      image_url: { url: toDataUrl(reference) },
-    }));
-  }
-
-  const response = await fetch("https://openrouter.ai/api/v1/images", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error?.message || "OpenRouter generation failed");
-  }
-
-  const image = data.data?.[0];
-  if (!image?.b64_json) {
-    throw new Error("No image in OpenRouter response");
-  }
-
-  return {
-    buffer: Buffer.from(image.b64_json, "base64"),
-    mimeType: image.media_type || "image/png",
-  };
-}
-
 async function generateWithOpenAI(apiKey, options) {
-  const { prompt, aspectRatio, model = "dall-e-3", references } = options;
+  const { prompt, aspectRatio, model = "gpt-image-2.6-flare", references, complexity } = options;
 
   const size = openAiSizeTable(model)[aspectRatio];
   if (!size) {
@@ -102,6 +42,12 @@ async function generateWithOpenAI(apiKey, options) {
     form.append("model", model);
     form.append("prompt", prompt);
     form.append("size", size);
+    if (complexity) {
+      form.append("complexity", complexity);
+    }
+    if (!model.startsWith("dall-e")) {
+      form.append("output_format", "png");
+    }
     for (const reference of references) {
       form.append(
         "image[]",
@@ -126,7 +72,10 @@ async function generateWithOpenAI(apiKey, options) {
         prompt,
         n: 1,
         size,
-        ...(model.startsWith("dall-e") && { response_format: "b64_json" }),
+        ...(complexity && { complexity }),
+        ...(model.startsWith("dall-e")
+          ? { response_format: "b64_json" }
+          : { output_format: "png" }),
       }),
     });
   }
@@ -136,7 +85,7 @@ async function generateWithOpenAI(apiKey, options) {
     throw new Error(data.error?.message || "OpenAI generation failed");
   }
 
-  const base64Data = data.data[0]?.b64_json;
+  const base64Data = data.data?.[0]?.b64_json;
   if (!base64Data) {
     throw new Error("No image in response");
   }

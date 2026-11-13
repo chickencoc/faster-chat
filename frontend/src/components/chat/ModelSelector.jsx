@@ -5,7 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-preact";
 import ProviderLogo from "@/components/ui/ProviderLogo";
 
-const VARIANTS = {
+export const selectorButtonClass =
+  "text-theme-text flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors duration-150";
+export const selectorPanelClass =
+  "bg-theme-surface border-theme-surface-strong absolute right-0 bottom-full z-50 mb-2 overflow-hidden rounded-xl border shadow-lg";
+
+export const VARIANTS = {
   text: {
     queryKey: ["models", "text"],
     buttonClass:
@@ -53,9 +58,7 @@ const ModelSelector = ({ type = "text", currentModel, onModelChange }) => {
   if (type === "image" && (models.length === 0 || !currentModelData)) {
     return (
       <div className={`${variant.emptyWrapClass} rounded-xl border px-3 py-2 text-sm`}>
-        <span className={variant.emptyTextClass}>
-          No image models - add Replicate, OpenRouter, OpenAI, or Google
-        </span>
+        <span className={variant.emptyTextClass}>No image models - add OpenAI or Google</span>
       </div>
     );
   }
@@ -69,21 +72,22 @@ const ModelSelector = ({ type = "text", currentModel, onModelChange }) => {
   }
 
   return (
-    <Menu as="div" className="relative">
+    <Menu as="div" className="relative min-w-0">
       <MenuButton
-        className={`${variant.buttonClass} text-theme-text flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-lg transition-all duration-200 hover:scale-105 active:scale-95`}>
-        <span className="flex items-center gap-2">
+        aria-label="Select model"
+        className={`${variant.buttonClass} ${selectorButtonClass} max-w-[min(16rem,35vw)]`}>
+        <span className="flex min-w-0 items-center gap-2">
           <ProviderLogo
             providerId={currentProviderId}
             displayName={currentModelData.provider_display_name}
             size="sm"
           />
-          {currentModelData.display_name}
+          <span className="truncate">{currentModelData.display_name}</span>
         </span>
         <ChevronDown className="ui-open:rotate-180 h-4 w-4 transition-transform duration-200" />
       </MenuButton>
 
-      <MenuItems className="bg-theme-surface border-theme-surface-strong animate-in fade-in zoom-in-95 absolute top-full left-0 z-50 mt-2 w-72 overflow-hidden rounded-xl border shadow-lg duration-100">
+      <MenuItems className={`${selectorPanelClass} w-72 max-w-[calc(100vw-3rem)]`}>
         <div className="max-h-96 overflow-y-auto p-1">
           {models.map((model) => {
             const providerId = model.provider_name || model.provider?.toLowerCase();

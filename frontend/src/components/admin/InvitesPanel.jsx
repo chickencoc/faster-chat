@@ -83,7 +83,7 @@ const InvitesPanel = () => {
                 <button
                   type="button"
                   onClick={() => copyLink(invite.token)}
-                  className="text-theme-blue text-xs hover:underline">
+                  className="text-theme-primary text-xs hover:underline">
                   Copy
                 </button>
                 <button

@@ -5,7 +5,7 @@ describe("supportsImageToImage", () => {
   test("defaults per provider", () => {
     expect(supportsImageToImage("google", null)).toBe(true);
     expect(supportsImageToImage("openai", null)).toBe(true);
-    expect(supportsImageToImage("openrouter", null)).toBe(true);
+    expect(supportsImageToImage("openrouter", null)).toBe(false);
     expect(supportsImageToImage("replicate", null)).toBe(false);
     expect(supportsImageToImage("sd-server", null)).toBe(false);
     expect(supportsImageToImage(undefined, null)).toBe(false);

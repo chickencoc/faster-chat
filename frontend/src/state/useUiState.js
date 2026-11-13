@@ -7,8 +7,9 @@ export const useUiState = create(
     (set) => ({
       sidebarOpen: true,
       sidebarCollapsed: false,
-      preferredModel: "claude-sonnet-4-5",
-      preferredImageModel: null,
+      preferredModel: null,
+      draftChat: null,
+      lastUsedModels: {},
       imageAspectRatio: IMAGE_GENERATION.DEFAULT_ASPECT_RATIO,
       imageCount: IMAGE_GENERATION.DEFAULT_NUM_IMAGES,
       theme: "dark",
@@ -25,8 +26,19 @@ export const useUiState = create(
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarCollapsed: (isCollapsed) => set({ sidebarCollapsed: isCollapsed }),
       toggleSidebarCollapse: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      setDraftChat: (draftChat) => set({ draftChat }),
       setPreferredModel: (modelId) => set({ preferredModel: modelId }),
-      setPreferredImageModel: (modelId) => set({ preferredImageModel: modelId }),
+      rememberModel: (userId, type, modelId) => {
+        if (userId == null || !modelId) {
+          return;
+        }
+        set((state) => ({
+          lastUsedModels: {
+            ...state.lastUsedModels,
+            [userId]: { ...state.lastUsedModels[userId], [type]: modelId },
+          },
+        }));
+      },
       setImageAspectRatio: (ratio) => set({ imageAspectRatio: ratio }),
       setImageCount: (count) => set({ imageCount: count }),
       toggleTheme: () => set((state) => ({ theme: state.theme === "light" ? "dark" : "light" })),
@@ -50,11 +62,15 @@ export const useUiState = create(
     }),
     {
       name: "ui-state",
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...persistedState,
+        preferredModel: null,
+      }),
       partialize: (state) => ({
         sidebarOpen: state.sidebarOpen,
         sidebarCollapsed: state.sidebarCollapsed,
-        preferredModel: state.preferredModel,
-        preferredImageModel: state.preferredImageModel,
+        lastUsedModels: state.lastUsedModels,
         imageAspectRatio: state.imageAspectRatio,
         imageCount: state.imageCount,
         theme: state.theme,

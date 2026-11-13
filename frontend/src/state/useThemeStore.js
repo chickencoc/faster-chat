@@ -138,7 +138,7 @@ export const useThemeStore = create(
       // Current theme ID
       themeId: "default",
       // Current mode (light/dark)
-      mode: "dark",
+      mode: "light",
       // Loaded theme data
       currentTheme: null,
       // Available themes
@@ -151,7 +151,7 @@ export const useThemeStore = create(
       // Code blocks
       showCodeLineNumbers: false,
       // Assistant message token stats
-      showTokenStats: false,
+      showTokenStats: true,
 
       // Initialize theme on app start
       initializeTheme: async () => {

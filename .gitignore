@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/prod_test/
 
 # Monorepo packages
 /frontend/node_modules
@@ -20,9 +21,12 @@
 
 # production
 /build
+/for_prod/
 dist
 dist-ssr
 *.local
+production*
+/scripts/
 
 # Logs
 logs
@@ -35,8 +39,9 @@ lerna-debug.log*
 
 # do not commit any .env files to git
 .env
+.env.*
+!.env.example
 !.env.sample
-.env.backup
 
 # Database (ignore all .db files everywhere)
 *.db
@@ -45,9 +50,9 @@ lerna-debug.log*
 *.db.backup*
 *.db.bak
 
-# File uploads (keep directory structure but ignore uploaded files)
-/server/data/uploads/*
-!/server/data/uploads/.gitkeep
+# Server runtime data
+/server/data/*
+!/server/data/.gitkeep
 
 #cache
 .eslintcache
@@ -67,6 +72,7 @@ next-env.d.ts
 /specs
 
 # Editor directories and files
+/.claude/settings.local.json
 ._*
 .vscode/*
 !.vscode/extensions.json

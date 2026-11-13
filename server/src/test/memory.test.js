@@ -1,6 +1,9 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createMemoryMiddleware, isMemoryEnabledForRequest } from "../lib/memory.js";
 import { MEMORY_EXTRACTION_MAX_FACTS_PER_TURN } from "@faster-chat/shared";
+import { generateText } from "ai";
+import { MockLanguageModelV3 } from "ai/test";
+import { wrapModelWithMemory } from "../lib/memory.js";
 
 describe("memory helpers", () => {
   test("isMemoryEnabledForRequest requires all memory gates to pass", () => {
@@ -52,15 +55,43 @@ describe("memory helpers", () => {
 
     const result = await middleware.transformParams({
       params: {
-        system: "Base system prompt",
+        prompt: [{ role: "system", content: "Base system prompt" }],
         providerOptions: {
           memory: { userId: 1, chatId: "chat-1", enabled: true },
         },
       },
     });
 
-    expect(result.system).toContain("Base system prompt");
-    expect(result.system).toContain("uses Arch Linux");
+    expect(result.prompt[0].content).toContain("Base system prompt");
+    expect(result.prompt[0].content).toContain("uses Arch Linux");
+  });
+
+  test("saved memories reach the provider prompt without losing system instructions", async () => {
+    const model = new MockLanguageModelV3({
+      doGenerate: {
+        content: [{ type: "text", text: "Hello" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: { inputTokens: { total: 1 }, outputTokens: { total: 1 } },
+        warnings: [],
+      },
+    });
+    const wrappedModel = wrapModelWithMemory(model, {
+      getSetting: () => "true",
+      getUserMemoryEnabled: () => true,
+      getChatMemoryDisabled: () => false,
+      getMemoriesForUser: () => [{ fact: "uses Arch Linux" }],
+    });
+
+    await generateText({
+      model: wrappedModel,
+      system: "Base system prompt",
+      prompt: "Hello",
+      providerOptions: { memory: { userId: 1, enabled: true } },
+    });
+
+    const system = model.doGenerateCalls[0].prompt.find((message) => message.role === "system");
+    expect(system.content).toContain("Base system prompt");
+    expect(system.content).toContain("uses Arch Linux");
   });
 
   test("extractMemories caps persisted facts to MEMORY_EXTRACTION_MAX_FACTS_PER_TURN", async () => {

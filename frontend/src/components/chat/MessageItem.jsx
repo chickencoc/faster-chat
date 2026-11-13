@@ -3,7 +3,20 @@ import { extractTextContent } from "@/lib/messageUtils";
 import { formatTokenStats } from "@/lib/tokenStats";
 import { useThemeStore } from "@/state/useThemeStore";
 import { memo } from "@preact/compat";
-import { AlertTriangle, Brain, ChevronDown, Sparkles } from "lucide-preact";
+import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
+import {
+  AlertTriangle,
+  Brain,
+  ChevronDown,
+  Copy,
+  FileCode,
+  Globe,
+  Image,
+  MoreHorizontal,
+  RotateCw,
+  Sparkles,
+} from "lucide-preact";
+import { toast } from "sonner";
 import MessageAttachment from "./MessageAttachment";
 import ModelAvatar from "./ModelAvatar";
 import SearchStatus from "./SearchStatus";
@@ -42,15 +55,32 @@ const parseThinkingBlocks = (text) => {
   return { thinking, content };
 };
 
-const MessageItem = memo(({ message, onStop, onRegenerate }) => {
+const actionClass =
+  "text-theme-text-muted hover:bg-theme-surface-strong hover:text-theme-text rounded-lg p-2 transition-colors duration-75";
+
+const nativeTools = {
+  "tool-webSearch": { Icon: Globe, label: "Searching the web", done: "Web search completed" },
+  "tool-imageGeneration": { Icon: Image, label: "Generating an image", done: "Image generated" },
+  "tool-codeInterpreter": {
+    Icon: FileCode,
+    label: "Running code",
+    done: "Code execution completed",
+  },
+};
+
+const MessageItem = memo(({ message, isStreaming, onStop, onRegenerate }) => {
   const showTokenStats = useThemeStore((state) => state.showTokenStats);
   const isUser = message.role === "user";
   const rawContent = extractTextContent(message);
   const { thinking, content } = isUser
     ? { thinking: [], content: rawContent }
     : parseThinkingBlocks(rawContent);
-  const isStreaming = message.experimental_status === "streaming";
-  const showActions = !isUser && (onStop || onRegenerate);
+  const summaries =
+    message.parts?.filter((part) => part.type === "reasoning" && part.text.trim()) ?? [];
+  const tools = isStreaming
+    ? (message.parts?.filter((part) => Object.hasOwn(nativeTools, part.type)) ?? [])
+    : [];
+  const showActions = !isUser && (onStop || onRegenerate || (!isStreaming && content));
   const hasAttachments = message.fileIds && message.fileIds.length > 0;
   const modelName = message.model;
   const hasThinking = thinking.length > 0;
@@ -65,14 +95,23 @@ const MessageItem = memo(({ message, onStop, onRegenerate }) => {
         (p) => p.type === "tool-invocation" && p.state === "result" && p.result?.error
       ) || [];
 
+  async function copyResponse() {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success("Copied");
+    } catch {
+      toast.error("Could not copy response");
+    }
+  }
+
   return (
     <div className={`mb-8 flex w-full ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`flex max-w-[85%] gap-4 md:max-w-[85%] ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+        className={`flex max-w-[85%] min-w-0 gap-4 md:max-w-[85%] ${isUser ? "flex-row-reverse" : "flex-row"}`}>
         {!isUser && <ModelAvatar modelId={modelName} />}
 
         <div
-          className={`relative overflow-hidden p-5 leading-relaxed transition-all duration-300 ease-in-out ${
+          className={`relative min-w-0 overflow-hidden p-5 leading-relaxed transition-all duration-300 ease-in-out ${
             isUser
               ? "bg-theme-surface-stronger text-theme-text rounded-tl-lg rounded-br-lg rounded-bl-lg bg-gradient-to-br pt-5"
               : "text-theme-text pt-0"
@@ -90,6 +129,12 @@ const MessageItem = memo(({ message, onStop, onRegenerate }) => {
                 <MessageAttachment key={fileId} fileId={fileId} />
               ))}
             </div>
+          )}
+
+          {!isUser && message.metadata?.generatedFileDownloadFailed && (
+            <p role="status" className="text-theme-text-muted mb-3 text-sm">
+              Some generated files could not be saved. Ask the model to generate them again.
+            </p>
           )}
 
           {hasThinking && (
@@ -125,7 +170,32 @@ const MessageItem = memo(({ message, onStop, onRegenerate }) => {
             </div>
           )}
 
-          <div className={isUser ? "max-h-[60vh] overflow-y-auto font-medium" : ""}>
+          {!isUser && (summaries.length > 0 || tools.length > 0) && (
+            <div className="text-theme-text-muted mb-4 space-y-2 text-sm">
+              {summaries.map((part, index) => (
+                <div key={index}>
+                  <MarkdownContent content={part.text} />
+                </div>
+              ))}
+              {tools.map((part) => {
+                const { Icon, label, done } = nativeTools[part.type];
+                return (
+                  <div key={part.toolCallId} className="flex items-center gap-2">
+                    <Icon size={15} />
+                    {part.state === "output-available"
+                      ? done
+                      : part.state === "output-error"
+                        ? "Tool failed"
+                        : label}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div
+            data-chat-message-text
+            className={isUser ? "max-h-[60vh] overflow-y-auto font-medium" : ""}>
             <MarkdownContent content={content} />
           </div>
 
@@ -136,7 +206,7 @@ const MessageItem = memo(({ message, onStop, onRegenerate }) => {
           )}
 
           {showActions && (
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex justify-start gap-2">
               {onStop && (
                 <button
                   type="button"
@@ -145,18 +215,37 @@ const MessageItem = memo(({ message, onStop, onRegenerate }) => {
                   Stop
                 </button>
               )}
-              {onRegenerate && (
+              {!isStreaming && content && (
                 <button
                   type="button"
-                  onClick={onRegenerate}
-                  className="border-theme-border text-theme-peach bg-theme-surface rounded-full border px-3 py-1 text-xs font-semibold shadow-sm transition-all duration-150 hover:brightness-110">
-                  Regenerate
+                  onClick={copyResponse}
+                  aria-label="Copy response"
+                  title="Copy response"
+                  className={actionClass}>
+                  <Copy size={16} />
                 </button>
+              )}
+              {onRegenerate && !isStreaming && (
+                <Menu>
+                  <MenuButton aria-label="More response actions" className={actionClass}>
+                    <MoreHorizontal size={16} />
+                  </MenuButton>
+                  <MenuItems
+                    anchor="bottom start"
+                    className="bg-theme-surface text-theme-text border-theme-border z-50 rounded-xl border p-1 shadow-lg [--anchor-gap:4px]">
+                    <MenuItem
+                      as="button"
+                      onClick={onRegenerate}
+                      className="data-[focus]:bg-theme-surface-strong flex items-center gap-2 rounded-lg px-3 py-2 text-sm">
+                      <RotateCw size={16} /> Regenerate response
+                    </MenuItem>
+                  </MenuItems>
+                </Menu>
               )}
             </div>
           )}
 
-          {isStreaming && !activeToolCall && (
+          {isStreaming && !activeToolCall && !summaries.length && !tools.length && (
             <div className="text-theme-mauve mt-3 flex transform-gpu animate-pulse items-center gap-2">
               <Sparkles className="h-4 w-4" />
               <span className="text-xs font-medium">Processing...</span>

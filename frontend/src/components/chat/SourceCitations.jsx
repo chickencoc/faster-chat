@@ -16,6 +16,14 @@ export function extractSources(parts) {
   const sources = [];
   const seen = new Set();
   for (const part of parts) {
+    if (part.type === "source-url") {
+      if (!seen.has(part.url) && /^https?:\/\//i.test(part.url) && URL.canParse(part.url)) {
+        seen.add(part.url);
+        const domain = new URL(part.url).hostname;
+        sources.push({ title: part.title || domain, url: part.url, domain });
+      }
+      continue;
+    }
     if (part.type !== "tool-invocation" || part.state !== "result") {
       continue;
     }

@@ -9,36 +9,51 @@ import { useChatMemoryEnabled } from "@/hooks/useMemoryStatus";
 import { useChatNavigation } from "@/hooks/useChatNavigation";
 import { useCreateChatMutation, useCreateMessageMutation } from "@/hooks/useChatsQuery";
 import { useImageGeneration } from "@/hooks/useImageGeneration";
+import { useAuthState } from "@/state/useAuthState";
+import { useChatQuote } from "@/state/useChatQuote";
 import { useUiState } from "@/state/useUiState";
 import { providersClient } from "@/lib/providersClient";
-import { CACHE_DURATIONS, supportedAspectRatios, supportsImageToImage } from "@faster-chat/shared";
+import {
+  CACHE_DURATIONS,
+  OPENAI_IMAGE_COMPLEXITIES,
+  OPENAI_REASONING_EFFORTS,
+  supportedAspectRatios,
+  supportsImageToImage,
+  supportsOpenAIImageComplexity,
+  supportsOpenAIReasoning,
+} from "@faster-chat/shared";
 import { useQuery } from "@tanstack/react-query";
 
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { toast, Toaster } from "sonner";
 import InputArea from "./InputArea";
+import EffortSelector from "./EffortSelector";
 import MessageList from "./MessageList";
 import ModelSelector from "./ModelSelector";
 import VoiceSettings from "./VoiceSettings";
 import VoiceStatusIndicator from "./VoiceStatusIndicator";
 
-const ChatInterface = ({ chatId }) => {
+const ChatInterface = ({ chatId, chat }) => {
   const { navigateToChat } = useChatNavigation();
   const createChatMutation = useCreateChatMutation();
-  const preferredModel = useUiState((state) => state.preferredModel);
+  const userId = useAuthState((state) => state.user?.id);
+  const hasQuote = useChatQuote((state) => state.quote?.chatId === chatId);
   const setPreferredModel = useUiState((state) => state.setPreferredModel);
   const imageMode = useUiState((state) => state.imageMode);
-  const preferredImageModel = useUiState((state) => state.preferredImageModel);
-  const setPreferredImageModel = useUiState((state) => state.setPreferredImageModel);
+  const lastUsedModels = useUiState((state) => state.lastUsedModels[userId]);
+  const rememberModel = useUiState((state) => state.rememberModel);
   const storedAspectRatio = useUiState((state) => state.imageAspectRatio);
   const setImageAspectRatio = useUiState((state) => state.setImageAspectRatio);
   const imageCount = useUiState((state) => state.imageCount);
   const setImageCount = useUiState((state) => state.setImageCount);
   const autoScroll = useUiState((state) => state.autoScroll);
   const webSearchEnabled = useUiState((state) => state.webSearchEnabled);
-  const toggleWebSearch = useUiState((state) => state.toggleWebSearch);
   const setWebSearchEnabled = useUiState((state) => state.setWebSearchEnabled);
   const memoryEnabled = useChatMemoryEnabled(chatId);
+  const [modelOverride, setModelOverride] = useState(null);
+  const [imageModelOverride, setImageModelOverride] = useState(null);
+  const [effortOverride, setReasoningEffort] = useState(null);
+  const [complexityOverride, setImageComplexity] = useState(null);
 
   const { data: modelsData } = useQuery({
     queryKey: ["models", "text"],
@@ -52,14 +67,33 @@ const ChatInterface = ({ chatId }) => {
     staleTime: CACHE_DURATIONS.IMAGE_MODELS,
   });
 
-  const currentModelData = (modelsData?.models || []).find((m) => m.model_id === preferredModel);
-  const modelSupportsTools = !!currentModelData?.metadata?.supports_tools;
+  const textModels = modelsData?.models || [];
+  const selectedModel =
+    textModels.find((item) => item.model_id === modelOverride) ||
+    textModels.find((item) => item.model_id === chat?.lastModel) ||
+    textModels.find((item) => item.model_id === lastUsedModels?.text) ||
+    textModels.find((item) => item.is_default) ||
+    textModels[0];
 
   const imageModels = imageModelsData?.models || [];
   const imageModel =
-    imageModels.find((m) => m.model_id === preferredImageModel) ||
+    imageModels.find((m) => m.model_id === imageModelOverride) ||
+    imageModels.find((m) => m.model_id === chat?.lastImageModel) ||
+    imageModels.find((m) => m.model_id === lastUsedModels?.image) ||
     imageModels.find((m) => m.is_default) ||
     imageModels[0];
+  const canReason = supportsOpenAIReasoning(selectedModel?.provider, selectedModel?.model_id);
+  const canSetComplexity = supportsOpenAIImageComplexity(
+    imageModel?.provider,
+    imageModel?.model_id
+  );
+  const showEffort = imageMode ? canSetComplexity : canReason;
+  const savedReasoningEffort =
+    selectedModel?.model_id === chat?.lastModel ? chat?.reasoningEffort : null;
+  const savedImageComplexity =
+    imageModel?.model_id === chat?.lastImageModel ? chat?.imageComplexity : null;
+  const reasoningEffort = effortOverride ?? savedReasoningEffort ?? "medium";
+  const imageComplexity = complexityOverride ?? savedImageComplexity ?? "high";
   const aspectRatios = supportedAspectRatios(imageModel?.provider, imageModel?.model_id);
   const aspectRatio = aspectRatios.includes(storedAspectRatio)
     ? storedAspectRatio
@@ -71,6 +105,7 @@ const ChatInterface = ({ chatId }) => {
   );
 
   const handleModelChange = (modelId) => {
+    setModelOverride(modelId);
     setPreferredModel(modelId);
     clearError();
     const newModel = (modelsData?.models || []).find((m) => m.model_id === modelId);
@@ -109,7 +144,9 @@ const ChatInterface = ({ chatId }) => {
     setInput,
   } = useChat({
     id: chatId,
-    model: preferredModel,
+    model: selectedModel?.model_id,
+    reasoningEffort: canReason ? reasoningEffort : undefined,
+    imageGenerationModel: canReason && canSetComplexity ? imageModel.model_id : undefined,
     webSearchEnabled,
     memoryEnabled,
   });
@@ -150,14 +187,16 @@ const ChatInterface = ({ chatId }) => {
     });
 
     setInput("");
+    rememberModel(userId, "image", imageModel?.model_id);
 
     generateImage(
       {
         prompt,
         chatId,
-        model: preferredImageModel,
+        model: imageModel?.model_id,
         aspectRatio,
         numImages: imageCount,
+        ...(canSetComplexity && { complexity: imageComplexity }),
         referenceFileIds,
       },
       {
@@ -209,16 +248,6 @@ const ChatInterface = ({ chatId }) => {
             <SidebarToolbar onNewChat={handleNewChat} onSearch={() => {}} />
           </div>
 
-          {imageMode ? (
-            <ModelSelector
-              type="image"
-              currentModel={preferredImageModel}
-              onModelChange={setPreferredImageModel}
-            />
-          ) : (
-            <ModelSelector currentModel={preferredModel} onModelChange={handleModelChange} />
-          )}
-
           <ToolbarGroup>
             <VoiceStatusIndicator
               voiceControls={voice}
@@ -232,9 +261,10 @@ const ChatInterface = ({ chatId }) => {
         <div
           ref={scrollContainerRef}
           style={{ scrollbarGutter: "stable both-edges" }}
-          className="absolute inset-0 overflow-y-scroll pt-12 pb-[180px] md:px-20">
-          <div className="mx-auto max-w-4xl">
+          className={`absolute inset-0 overflow-y-scroll pt-12 md:px-20 ${hasQuote ? "pb-[260px]" : "pb-[180px]"}`}>
+          <div className="mx-auto mt-6 pt-3 max-w-4xl">
             <MessageList
+              chatId={chatId}
               messages={messages}
               isLoading={isLoading}
               isGeneratingImage={isGenerating}
@@ -256,16 +286,40 @@ const ChatInterface = ({ chatId }) => {
             />
 
             <InputArea
+              activeModel={selectedModel?.model_id}
+              modelSelector={
+                <>
+                  {showEffort && (
+                    <EffortSelector
+                      imageMode={imageMode}
+                      value={imageMode ? imageComplexity : reasoningEffort}
+                      onChange={imageMode ? setImageComplexity : setReasoningEffort}
+                      options={imageMode ? OPENAI_IMAGE_COMPLEXITIES : OPENAI_REASONING_EFFORTS}
+                      disabled={isLoading || isGenerating}
+                    />
+                  )}
+                  {imageMode ? (
+                    <ModelSelector
+                      type="image"
+                      currentModel={imageModel?.model_id}
+                      onModelChange={setImageModelOverride}
+                    />
+                  ) : (
+                    <ModelSelector
+                      currentModel={selectedModel?.model_id}
+                      onModelChange={handleModelChange}
+                    />
+                  )}
+                </>
+              }
               input={input}
               handleInputChange={handleInputChange}
               handleSubmit={handleSubmit}
               onSetInput={setInput}
               voiceControls={voice}
-              disabled={isLoading || isGenerating}
+              disabled={isLoading || isGenerating || !(imageMode ? imageModel : selectedModel)}
               onImageSubmit={handleImageSubmit}
               webSearchEnabled={webSearchEnabled}
-              onToggleWebSearch={toggleWebSearch}
-              modelSupportsTools={modelSupportsTools}
               chatId={chatId}
               selectedFiles={inputFiles}
               onFilesUploaded={appendFiles}

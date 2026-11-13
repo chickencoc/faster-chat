@@ -7,7 +7,7 @@ import { CACHE_DURATIONS } from "@faster-chat/shared";
 // Resolves the chat model that runs both prompt tools: the user's explicit
 // choice if it's vision-capable, else the preferred model when it supports
 // vision, else the first vision-capable text model.
-export function usePromptModel() {
+export function usePromptModel(activeModel) {
   const enhanceModelId = useUiState((state) => state.enhanceModelId);
   const preferredModel = useUiState((state) => state.preferredModel);
   const { data } = useQuery({
@@ -18,9 +18,10 @@ export function usePromptModel() {
 
   const visionModels = (data?.models || []).filter((m) => m.metadata?.supports_vision);
   const isVision = (id) => visionModels.some((m) => m.model_id === id);
+  const fallbackModel = activeModel ?? preferredModel;
   const modelId =
     (isVision(enhanceModelId) ? enhanceModelId : null) ||
-    (isVision(preferredModel) ? preferredModel : null) ||
+    (isVision(fallbackModel) ? fallbackModel : null) ||
     visionModels[0]?.model_id ||
     null;
 

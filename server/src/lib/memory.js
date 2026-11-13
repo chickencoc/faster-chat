@@ -51,9 +51,18 @@ export function createMemoryMiddleware(dbUtils) {
       }
 
       const memoryBlock = formatMemoryContext(memories);
-      const system = params.system ? `${params.system}\n\n${memoryBlock}` : memoryBlock;
+      const prompt = [...params.prompt];
+      const systemIndex = prompt.findIndex((message) => message.role === "system");
+      if (systemIndex >= 0) {
+        prompt[systemIndex] = {
+          ...prompt[systemIndex],
+          content: `${prompt[systemIndex].content}\n\n${memoryBlock}`,
+        };
+      } else {
+        prompt.unshift({ role: "system", content: memoryBlock });
+      }
 
-      return { ...params, system };
+      return { ...params, prompt };
     },
   };
 }

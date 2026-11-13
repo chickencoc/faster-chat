@@ -21,10 +21,22 @@ export const ASPECT_RATIO_SIZES = {
 
 const OPENAI_SIZES = {
   "gpt-image": { "1:1": "1024x1024", "3:2": "1536x1024", "2:3": "1024x1536" },
+  "gpt-image-2": {
+    "1:1": "1024x1024",
+    "16:9": "1536x864",
+    "9:16": "864x1536",
+    "4:3": "1152x864",
+    "3:4": "864x1152",
+    "3:2": "1536x1024",
+    "2:3": "1024x1536",
+  },
   "dall-e": { "1:1": "1024x1024", "16:9": "1792x1024", "9:16": "1024x1792" },
 };
 
 export function openAiSizeTable(modelId) {
+  if (modelId?.startsWith("gpt-image-2")) {
+    return OPENAI_SIZES["gpt-image-2"];
+  }
   return modelId?.startsWith("dall-e") ? OPENAI_SIZES["dall-e"] : OPENAI_SIZES["gpt-image"];
 }
 
@@ -37,8 +49,6 @@ export function supportedAspectRatios(provider, modelId) {
 export const IMAGE_TO_IMAGE_DEFAULTS = {
   google: true,
   openai: true,
-  openrouter: true,
-  replicate: false,
   default: false,
 };
 
@@ -49,15 +59,8 @@ export function supportsImageToImage(provider, metadata, modelId) {
   if (provider === "openai" && modelId?.startsWith("dall-e")) {
     return false;
   }
-  return provider ? IMAGE_TO_IMAGE_DEFAULTS[provider] ?? IMAGE_TO_IMAGE_DEFAULTS.default : false;
+  return provider ? (IMAGE_TO_IMAGE_DEFAULTS[provider] ?? IMAGE_TO_IMAGE_DEFAULTS.default) : false;
 }
-
-// Phase 1: Single hardcoded model
-// Phase 2: This will be fetched from database based on admin configuration
-export const IMAGE_MODELS = {
-  DEFAULT: "black-forest-labs/flux-1.1-pro",
-  DISPLAY_NAME: "Flux 1.1 Pro",
-};
 
 // Canonical reverse-prompt length options: keys are the API contract, values are UI labels
 export const REVERSE_PROMPT_LENGTHS = {

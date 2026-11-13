@@ -59,7 +59,7 @@ const ResetPasswordModal = ({ user, isOpen, onClose }) => {
             type="password"
             value={password}
             onInput={(e) => setPassword(e.target.value)}
-            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-blue mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
+            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-primary mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
             placeholder="Minimum 8 characters"
           />
         </div>
@@ -75,7 +75,7 @@ const ResetPasswordModal = ({ user, isOpen, onClose }) => {
             type="password"
             value={confirmPassword}
             onInput={(e) => setConfirmPassword(e.target.value)}
-            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-blue mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
+            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-primary mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
             placeholder="Re-enter password"
           />
           <p className="text-theme-text-muted mt-2 text-sm">

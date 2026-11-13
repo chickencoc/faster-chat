@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
@@ -10,6 +10,36 @@
     <script>
       (() => {
         const root = document.documentElement;
+        const defaultLight = {
+          background: "#F9FAFB",
+          foreground: "#111827",
+          primary: "#4F46E5",
+          secondary: "#F3F4F6",
+          accent: "#6366F1",
+          muted: "#9CA3AF",
+          border: "#E5E7EB",
+          surface: "#F3F4F6",
+          "surface-strong": "#E5E7EB",
+          "surface-stronger": "#D1D5DB",
+          overlay: "#9CA3AF",
+          "overlay-strong": "#6B7280",
+          text: "#111827",
+          "text-muted": "#6B7280",
+          "text-subtle": "#4B5563",
+          red: "#DC2626",
+          green: "#16A34A",
+          yellow: "#CA8A04",
+          blue: "#2563EB",
+          pink: "#DB2777",
+          teal: "#0D9488",
+          mauve: "#7C3AED",
+          peach: "#EA580C",
+          sky: "#0284C7",
+          lavender: "#818CF8",
+          canvas: "#F9FAFB",
+          "canvas-alt": "#FFFFFF",
+          "canvas-strong": "#F3F4F6",
+        };
         const defaultDark = {
           background: "#09090b",
           foreground: "#FAFAFA",
@@ -41,9 +71,9 @@
           "canvas-strong": "#09090b",
         };
 
-        let mode = "dark";
+        let mode = "light";
         try {
-          const raw = localStorage.getItem("theme-store-v2");
+          const raw = localStorage.getItem("theme-store-v3");
           if (raw) {
             const parsed = JSON.parse(raw);
             mode = parsed?.state?.mode || mode;
@@ -54,11 +84,12 @@
 
         root.classList.toggle("dark", mode === "dark");
         root.style.colorScheme = mode;
-        Object.entries(defaultDark).forEach(([key, value]) => {
+        const colors = mode === "dark" ? defaultDark : defaultLight;
+        Object.entries(colors).forEach(([key, value]) => {
           root.style.setProperty(`--theme-${key}`, value);
         });
-        root.style.setProperty("--shadow-color", "9 9 11");
-        root.style.setProperty("--inverted-text", defaultDark.text);
+        root.style.setProperty("--shadow-color", mode === "dark" ? "9 9 11" : "243 244 246");
+        root.style.setProperty("--inverted-text", colors.text);
       })();
     </script>
     <div id="app"></div>

@@ -58,6 +58,34 @@ describe("chat routes", () => {
       chatId = data.id;
     });
 
+    test("POST /api/chats saves a draft together with its first message", async () => {
+      const id = crypto.randomUUID();
+      const res = await makeRequest(app, "POST", "/api/chats", {
+        body: {
+          id,
+          memoryDisabled: true,
+          message: { id: "draft-first", role: "user", content: "First question" },
+        },
+        cookie: adminCookie,
+      });
+      expect(res.status).toBe(201);
+      const data = await res.json();
+      expect(data.firstMessage.content).toBe("First question");
+      expect(data.title).toBe("First question");
+      expect(dbUtils.getMessageCountByChat(id)).toBe(1);
+      expect(dbUtils.getChatMemoryDisabled(id)).toBe(true);
+    });
+
+    test("invalid draft attachments do not leave an empty chat", async () => {
+      const id = crypto.randomUUID();
+      const res = await makeRequest(app, "POST", "/api/chats", {
+        body: { id, message: { role: "user", content: "Question", fileIds: ["missing-file"] } },
+        cookie: adminCookie,
+      });
+      expect(res.status).toBe(403);
+      expect(dbUtils.getChatById(id)).toBeNull();
+    });
+
     test("POST /api/chats with title sets the title", async () => {
       const res = await makeRequest(app, "POST", "/api/chats", {
         body: { title: "My Chat" },

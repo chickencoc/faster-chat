@@ -2,6 +2,8 @@ import MessageItem from "./MessageItem";
 import { getMessageTimestamp } from "@/lib/messageUtils";
 import { MESSAGE_CONSTANTS } from "@faster-chat/shared";
 import { ImageIcon } from "lucide-preact";
+import { useRef } from "preact/hooks";
+import MessageSelection from "./MessageSelection";
 
 function sortMessagesWithUserFirst(messages) {
   return [...messages].sort((a, b) => {
@@ -65,9 +67,18 @@ const EmptyState = () => (
   </div>
 );
 
-const MessageList = ({ messages, isLoading, isGeneratingImage, status, onStop, onRegenerate }) => {
+const MessageList = ({
+  chatId,
+  messages,
+  isLoading,
+  isGeneratingImage,
+  status,
+  onStop,
+  onRegenerate,
+}) => {
+  const messageListRef = useRef(null);
   const sortedMessages = sortMessagesWithUserFirst(messages);
-  const lastAssistantId = sortedMessages.findLast((msg) => msg.role === "assistant")?.id;
+  const latest = sortedMessages.at(-1);
   const isEmpty = messages.length === 0 && !isLoading && !isGeneratingImage;
 
   if (isEmpty) {
@@ -75,15 +86,16 @@ const MessageList = ({ messages, isLoading, isGeneratingImage, status, onStop, o
   }
 
   return (
-    <div className="space-y-4" aria-live="polite">
+    <div ref={messageListRef} className="space-y-4" aria-live="polite">
       {sortedMessages.map((message) => {
-        const isActiveAssistant = message.id === lastAssistantId && message.role === "assistant";
+        const isActiveAssistant = message.id === latest.id && message.role === "assistant";
         const actions = getMessageActions(isActiveAssistant, status, onStop, onRegenerate);
 
         return (
           <MessageItem
             key={message.id}
             message={message}
+            isStreaming={isActiveAssistant && (status === "streaming" || status === "submitted")}
             onStop={actions.stop}
             onRegenerate={actions.regenerate}
           />
@@ -96,6 +108,7 @@ const MessageList = ({ messages, isLoading, isGeneratingImage, status, onStop, o
         </span>
       )}
       {isGeneratingImage && <ImageGeneratingSkeleton />}
+      <MessageSelection chatId={chatId} messageListRef={messageListRef} />
     </div>
   );
 };

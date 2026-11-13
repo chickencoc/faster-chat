@@ -5,7 +5,17 @@ import {
   ATTACHMENT_INPUT_ACCEPT,
   ATTACHMENT_TITLE_TEXT,
 } from "@faster-chat/shared";
-import { Paperclip, Image, Globe, Send, Mic, MicOff, WandSparkles, Lightbulb } from "lucide-preact";
+import {
+  Paperclip,
+  Image,
+  Send,
+  Mic,
+  MicOff,
+  WandSparkles,
+  Lightbulb,
+  MessageSquare,
+  X,
+} from "lucide-preact";
 import { toast } from "sonner";
 import ChatMemoryButton from "./ChatMemoryButton";
 import InspirationPanel from "@/components/imagegen/InspirationPanel";
@@ -15,11 +25,14 @@ import { useFileDragDrop } from "@/hooks/useFileDragDrop";
 import { usePromptModel, useEnhancePrompt } from "@/hooks/usePromptTools";
 import { FilePreviewList } from "./FilePreviewList";
 import { useUiState } from "@/state/useUiState";
+import { useChatQuote } from "@/state/useChatQuote";
 
 const FILE_INPUT_ID = "chat-input-file-upload";
 const IMAGE_COUNTS = Array.from({ length: IMAGE_GENERATION.MAX_IMAGES }, (_, i) => i + 1);
 
 const InputArea = ({
+  modelSelector,
+  activeModel,
   input,
   handleInputChange,
   handleSubmit,
@@ -27,8 +40,6 @@ const InputArea = ({
   voiceControls,
   onImageSubmit,
   webSearchEnabled,
-  onToggleWebSearch,
-  modelSupportsTools,
   chatId,
   selectedFiles,
   onFilesUploaded,
@@ -59,7 +70,10 @@ const InputArea = ({
   const setEnhanceModelId = useUiState((state) => state.setEnhanceModelId);
   const pendingPrompt = useUiState((state) => state.pendingPrompt);
   const clearPendingPrompt = useUiState((state) => state.clearPendingPrompt);
-  const { visionModels, modelId: promptModelId } = usePromptModel();
+  const quotes = useChatQuote((state) =>
+    state.quote?.chatId === chatId ? state.quote?.items : undefined
+  );
+  const { visionModels, modelId: promptModelId } = usePromptModel(activeModel);
   const { mutateAsync: enhancePrompt } = useEnhancePrompt();
   const [showInspirationPanel, setShowInspirationPanel] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
@@ -139,19 +153,18 @@ const InputArea = ({
     clearPendingPrompt();
   }, [pendingPrompt, clearPendingPrompt]);
 
+  useEffect(() => {
+    if (quotes?.length) {
+      textareaRef.current?.focus();
+    }
+  }, [quotes]);
+
   const handleToggleImageMode = () => {
     if (webSearchEnabled) {
       setWebSearchEnabled(false);
     }
     setJustEnhanced(false);
     toggleImageMode();
-  };
-
-  const handleToggleWebSearch = () => {
-    if (imageMode) {
-      setImageMode(false);
-    }
-    onToggleWebSearch();
   };
 
   const adjustHeight = (element) => {
@@ -167,7 +180,7 @@ const InputArea = ({
     handleInputChange(e);
   };
 
-  const hasContent = input.trim() || selectedFiles.length > 0;
+  const hasContent = input.trim() || quotes?.length || selectedFiles.length > 0;
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -183,6 +196,14 @@ const InputArea = ({
     if (disabled) {
       return;
     }
+
+    const quotedText = (quotes ?? []).map(({ text }) =>
+      text
+        .split("\n")
+        .map((line) => `> ${line}`)
+        .join("\n")
+    );
+    const content = [...quotedText, input.trim()].filter(Boolean).join("\n\n");
 
     // Image mode: call onImageSubmit instead of normal handleSubmit
     if (imageMode && onImageSubmit) {
@@ -204,7 +225,8 @@ const InputArea = ({
       }
 
       setJustEnhanced(false);
-      onImageSubmit(input.trim(), selectedFiles);
+      onImageSubmit(content, selectedFiles);
+      useChatQuote.getState().clearQuote(chatId);
       onClearFiles?.(); // references are consumed; don't leak them into the next message
       setImageMode(false); // Auto-reset after send
       if (textareaRef.current) {
@@ -213,7 +235,8 @@ const InputArea = ({
       return;
     }
 
-    handleSubmit(e);
+    handleSubmit(e, content);
+    useChatQuote.getState().clearQuote(chatId);
 
     // Reset textarea height when clearing input
     if (textareaRef.current) {
@@ -275,6 +298,33 @@ const InputArea = ({
         )}
 
         <FilePreviewList files={selectedFiles} onRemove={onRemoveFile} />
+
+        {quotes?.length > 0 && (
+          <div className="mx-2 mt-2 flex gap-2 overflow-x-auto">
+            {quotes.map(({ id, text }, index) => (
+              <div
+                key={id}
+                className="bg-theme-surface-strong border-theme-border flex w-60 max-w-full shrink-0 items-start gap-2 rounded-xl border px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-theme-text-muted line-clamp-2 text-sm break-words whitespace-pre-wrap">
+                    {text}
+                  </p>
+                  <span className="text-theme-text mt-2 flex items-center gap-1.5 text-xs">
+                    <MessageSquare size={13} />
+                    선택한 텍스트 {index + 1}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  aria-label={`선택한 텍스트 ${index + 1} 제거`}
+                  onClick={() => useChatQuote.getState().removeQuote(chatId, id)}
+                  className="text-theme-text-muted hover:text-theme-text hover:bg-theme-surface rounded-full p-1 transition-colors duration-75">
+                  <X size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Textarea - Top */}
         <textarea
@@ -343,7 +393,7 @@ const InputArea = ({
         )}
 
         {/* Bottom Row - Tool Buttons + Send */}
-        <div className="flex items-center justify-between px-2 pb-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-1">
           {/* Tool Buttons - Left */}
           <div className="flex items-center gap-1">
             {(!imageMode || supportsImageToImage) && (
@@ -371,34 +421,6 @@ const InputArea = ({
               aria-label={imageMode ? "Exit image mode" : "Generate image"}
               disabled={disabled}>
               <Image size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={modelSupportsTools ? handleToggleWebSearch : undefined}
-              className={`rounded-lg p-2 transition-colors ${
-                !modelSupportsTools
-                  ? "text-theme-muted/40 cursor-not-allowed opacity-50"
-                  : webSearchEnabled
-                    ? "bg-theme-green/20 text-theme-green"
-                    : "text-theme-muted hover:bg-theme-green/10 hover:text-theme-green"
-              }`}
-              title={
-                !modelSupportsTools
-                  ? "This model doesn't support web search"
-                  : webSearchEnabled
-                    ? "Disable Web Search"
-                    : "Search Web"
-              }
-              aria-label={
-                !modelSupportsTools
-                  ? "This model doesn't support web search"
-                  : webSearchEnabled
-                    ? "Disable web search"
-                    : "Search web"
-              }
-              aria-pressed={webSearchEnabled}
-              disabled={disabled || !modelSupportsTools}>
-              <Globe size={18} />
             </button>
             <ChatMemoryButton chatId={chatId} disabled={disabled} />
 
@@ -450,19 +472,21 @@ const InputArea = ({
             )}
           </div>
 
-          {/* Send Button - Right */}
-          <button
-            onClick={handleFormSubmit}
-            disabled={isSubmitDisabled}
-            type="button"
-            aria-label="Send message"
-            className={`rounded-xl p-2 transition-all duration-200 ${
-              isSubmitDisabled
-                ? "bg-theme-surface-strong text-theme-muted cursor-not-allowed"
-                : "bg-theme-primary hover:bg-theme-accent text-white shadow-sm hover:scale-105 active:scale-95"
-            }`}>
-            <Send size={18} />
-          </button>
+          <div className="ml-auto flex min-w-0 items-center gap-2">
+            {modelSelector}
+            <button
+              onClick={handleFormSubmit}
+              disabled={isSubmitDisabled}
+              type="button"
+              aria-label="Send message"
+              className={`rounded-xl p-2 transition-all duration-200 ${
+                isSubmitDisabled
+                  ? "bg-theme-surface-strong text-theme-muted cursor-not-allowed"
+                  : "bg-theme-primary hover:bg-theme-accent text-white shadow-sm hover:scale-105 active:scale-95"
+              }`}>
+              <Send size={18} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

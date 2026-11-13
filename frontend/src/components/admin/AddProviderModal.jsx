@@ -146,7 +146,7 @@ const AddProviderModal = ({ isOpen, onClose }) => {
                 value={searchTerm}
                 onInput={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search providers..."
-                className="border-theme-surface-strong bg-theme-canvas text-theme-text placeholder-theme-text-muted focus:border-theme-blue w-full rounded-lg border px-4 py-2 focus:outline-none"
+                className="border-theme-surface-strong bg-theme-canvas text-theme-text placeholder-theme-text-muted focus:border-theme-primary w-full rounded-lg border px-4 py-2 focus:outline-none"
               />
             </div>
 
@@ -219,10 +219,10 @@ const AddProviderModal = ({ isOpen, onClose }) => {
         ) : (
           <>
             {/* Selected provider */}
-            <div className="bg-theme-blue/10 rounded-lg p-3">
+            <div className="bg-theme-primary/10 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-theme-blue font-medium">
+                  <span className="text-theme-primary font-medium">
                     {selectedProvider.displayName || selectedProvider.name}
                   </span>
                   <ProviderBadge provider={selectedProvider} />
@@ -235,7 +235,7 @@ const AddProviderModal = ({ isOpen, onClose }) => {
                     setBaseUrl("");
                     setApiKey("");
                   }}
-                  className="text-theme-blue text-sm hover:underline">
+                  className="text-theme-primary text-sm hover:underline">
                   Change
                 </button>
               </div>
@@ -269,7 +269,7 @@ const AddProviderModal = ({ isOpen, onClose }) => {
                 value={displayName}
                 onInput={(e) => setDisplayName(e.target.value)}
                 placeholder={selectedProvider.displayName || selectedProvider.name}
-                className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-blue mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
+                className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-primary mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
               />
             </div>
 
@@ -290,7 +290,7 @@ const AddProviderModal = ({ isOpen, onClose }) => {
                   placeholder={
                     getProviderBaseUrl(selectedProvider, import.meta.env.DEV) || "https://..."
                   }
-                  className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-blue mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
+                  className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-primary mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
                 />
                 <p className="text-theme-text-muted mt-1 text-xs">
                   {selectedProvider.id === "ollama"
@@ -316,7 +316,7 @@ const AddProviderModal = ({ isOpen, onClose }) => {
                   value={apiKey}
                   onInput={(e) => setApiKey(e.target.value)}
                   placeholder="sk-..."
-                  className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-blue mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
+                  className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-primary mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
                 />
                 {selectedProvider.docs && (
                   <p className="text-theme-text-muted mt-1 text-xs">
@@ -353,7 +353,7 @@ const AddProviderModal = ({ isOpen, onClose }) => {
               <Button type="button" plain onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" color="blue" disabled={createMutation.isPending}>
+              <Button type="submit" color="theme" disabled={createMutation.isPending}>
                 {createMutation.isPending ? "Adding..." : "Add & Fetch Models"}
               </Button>
             </div>
@@ -369,7 +369,7 @@ const ProviderCard = ({ provider, onSelect }) => (
   <button
     type="button"
     onClick={() => onSelect(provider)}
-    className="border-theme-surface-strong bg-theme-canvas hover:border-theme-blue hover:bg-theme-canvas-alt w-full rounded-lg border p-3 text-left transition-colors">
+    className="border-theme-surface-strong bg-theme-canvas hover:border-theme-primary hover:bg-theme-canvas-alt w-full rounded-lg border p-3 text-left transition-colors">
     <div className="flex items-start justify-between gap-2">
       <div className="flex-1">
         <div className="flex items-center gap-2">

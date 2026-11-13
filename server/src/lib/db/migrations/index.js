@@ -7,6 +7,9 @@ import { migration as invites } from "./006_invites.js";
 import { migration as addLastActive } from "./007_add_last_active.js";
 import { migration as addFileFavorites } from "./008_add_file_favorites.js";
 import { migration as addModelImageToImage } from "./009_add_model_image_to_image.js";
+import { migration as disableRemovedProviders } from "./010_disable_removed_providers.js";
+import { migration as hideEmptyChats } from "./011_hide_empty_chats.js";
+import { migration as chatModelSettings } from "./012_chat_model_settings.js";
 
 export const migrations = [
   initialSchema,
@@ -18,4 +21,7 @@ export const migrations = [
   addLastActive,
   addFileFavorites,
   addModelImageToImage,
+  disableRemovedProviders,
+  hideEmptyChats,
+  chatModelSettings,
 ];

@@ -58,7 +58,7 @@ const CreateUserModal = ({ isOpen, onClose }) => {
             type="text"
             value={username}
             onInput={(e) => setUsername(e.target.value)}
-            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-blue mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
+            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-primary mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
             placeholder="Enter username"
           />
         </div>
@@ -74,7 +74,7 @@ const CreateUserModal = ({ isOpen, onClose }) => {
             type="password"
             value={password}
             onInput={(e) => setPassword(e.target.value)}
-            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-blue mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
+            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-primary mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
             placeholder="Minimum 8 characters"
           />
         </div>
@@ -87,7 +87,7 @@ const CreateUserModal = ({ isOpen, onClose }) => {
             id="create-user-role"
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-blue mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none">
+            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-primary mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none">
             <option value="member">Member</option>
             <option value="admin">Admin</option>
             <option value="readonly">Read Only</option>
@@ -102,7 +102,7 @@ const CreateUserModal = ({ isOpen, onClose }) => {
           <Button type="button" plain onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" color="blue" disabled={createMutation.isPending}>
+          <Button type="submit" color="theme" disabled={createMutation.isPending}>
             {createMutation.isPending ? "Creating..." : "Create User"}
           </Button>
         </div>

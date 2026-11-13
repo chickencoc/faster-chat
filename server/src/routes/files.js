@@ -30,8 +30,12 @@ export const filesRouter = new Hono();
 filesRouter.use("/*", ensureSession);
 
 function contentDisposition(disposition, filename) {
-  const fallback = filename.replace(/["\\\r\n]/g, "_");
-  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+  const fallback = filename.replace(/[^\x20-\x7e]|["\\]/g, "_");
+  const encoded = encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 }
 
 filesRouter.post("/", createRateLimiter(ENDPOINT_RATE_LIMITS.FILE_UPLOAD), async (c) => {

@@ -55,7 +55,7 @@ const EditProviderModal = ({ provider, onClose }) => {
             onInput={(e) => setApiKey(e.target.value)}
             placeholder="New API key"
             autoComplete="new-password"
-            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-blue mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
+            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-primary mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
           />
           <p className="text-theme-text-muted mt-1 text-xs">
             {provider.has_key ? "API key configured" : "No API key set"}
@@ -74,7 +74,7 @@ const EditProviderModal = ({ provider, onClose }) => {
             value={baseUrl}
             onInput={(e) => setBaseUrl(e.target.value)}
             placeholder="https://api.example.com"
-            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-blue mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
+            className="border-theme-surface-strong bg-theme-canvas text-theme-text focus:border-theme-primary mt-1 w-full rounded-lg border px-4 py-2 focus:outline-none"
           />
         </div>
 
@@ -86,7 +86,7 @@ const EditProviderModal = ({ provider, onClose }) => {
           <Button type="button" plain onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" color="blue" disabled={updateMutation.isPending}>
+          <Button type="submit" color="theme" disabled={updateMutation.isPending}>
             {updateMutation.isPending ? "Saving..." : "Save"}
           </Button>
         </div>

@@ -22,13 +22,14 @@ export function useChatPersistence(chatId) {
   }
 
   async function saveAssistantMessage(
-    { id, content, model = null, metadata = null, createdAt },
+    { id, content, model = null, metadata = null, fileIds = [], createdAt },
     currentChatId
   ) {
     const message = {
       id,
       role: "assistant",
       content,
+      fileIds,
       model,
       createdAt,
     };
@@ -44,6 +45,7 @@ export function useChatPersistence(chatId) {
     messages: messages ?? [],
     isChatLoading,
     isChatError,
+    isSaving: createMessageMutation.isPending,
     saveUserMessage,
     saveAssistantMessage,
   };

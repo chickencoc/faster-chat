@@ -1,7 +1,6 @@
 import {
   categorizeProvider,
   getAvailableProviders as getNativeProviders,
-  PROVIDERS,
   TIMEOUTS,
 } from "@faster-chat/shared";
 import { Hono } from "hono";
@@ -10,11 +9,7 @@ import db, { dbUtils } from "../lib/db.js";
 import { decryptApiKey, encryptApiKey } from "../lib/encryption.js";
 import { isLikelyValidApiKey } from "../lib/providerErrors.js";
 import { HTTP_STATUS } from "../lib/httpStatus.js";
-import { fetchReplicateImageModels } from "../lib/imageGeneration.js";
-import {
-  getAvailableProviders as getModelsDevProviders,
-  getModelsForProvider,
-} from "../lib/modelsdev.js";
+import { getModelsForProvider } from "../lib/modelsdev.js";
 import { getClientIP } from "../lib/requestUtils.js";
 import { validateProviderBaseUrl } from "../lib/ssrf.js";
 import { ensureSession, requireRole } from "../middleware/auth.js";
@@ -22,18 +17,6 @@ import { ensureSession, requireRole } from "../middleware/auth.js";
 const BulkEnableSchema = z.object({ enabled: z.boolean() });
 export const providersRouter = new Hono();
 providersRouter.use("*", ensureSession, requireRole("admin"));
-
-const DISABLED_BY_DEFAULT = new Set(["openrouter", "replicate"]);
-
-function getDefaultEnabledForProvider(providerName, fallbackEnabled) {
-  return DISABLED_BY_DEFAULT.has(providerName) ? false : fallbackEnabled;
-}
-
-function normalizeBaseUrl(providerName, baseUrl) {
-  return providerName === "openrouter"
-    ? baseUrl || "https://openrouter.ai/api/v1"
-    : baseUrl || null;
-}
 
 const apiKeySchema = z.string().min(1).refine(isLikelyValidApiKey, {
   message:
@@ -60,13 +43,9 @@ providersRouter.get("/available", async (c) => {
     ...provider,
     category: categorizeProvider(provider.id),
   }));
-  const communityProviders = await getModelsDevProviders();
-  const filteredCommunity = communityProviders.filter(
-    (p) => !Object.keys(PROVIDERS).includes(p.id)
-  );
-  const allProviders = [...nativeProviders, ...filteredCommunity].sort((a, b) => {
-    const order = { local: 0, "openai-compatible": 0, official: 1, community: 2 };
-    return (order[a.type ?? a.category] ?? 3) - (order[b.type ?? b.category] ?? 3);
+  const allProviders = nativeProviders.sort((a, b) => {
+    const order = { local: 0, official: 1 };
+    return order[a.category] - order[b.category];
   });
   return c.json({ providers: allProviders });
 });
@@ -90,7 +69,7 @@ providersRouter.get("/", async (c) => {
 providersRouter.post("/", async (c) => {
   const body = await c.req.json();
   const { name, displayName, providerType, baseUrl, apiKey } = CreateProviderSchema.parse(body);
-  const normalizedBaseUrl = normalizeBaseUrl(name, baseUrl);
+  const normalizedBaseUrl = baseUrl || null;
 
   if (normalizedBaseUrl && !validateProviderBaseUrl(normalizedBaseUrl)) {
     return c.json({ error: "Invalid base URL" }, HTTP_STATUS.BAD_REQUEST);
@@ -118,13 +97,17 @@ providersRouter.post("/", async (c) => {
 
   let models = [];
   try {
-    models = await fetchModelsForProvider(name, normalizedBaseUrl, { apiKey });
+    models = await fetchModelsForProvider(name, normalizedBaseUrl, {
+      apiKey,
+      providerType,
+      displayName,
+    });
     for (const model of models) {
       const modelId = dbUtils.createModel(
         providerId,
         model.model_id,
         model.display_name,
-        getDefaultEnabledForProvider(name, model.enabled),
+        model.enabled,
         model.model_type || "text"
       );
       if (model.metadata) dbUtils.setModelMetadata(modelId, model.metadata);
@@ -187,7 +170,7 @@ providersRouter.post("/:id/refresh-models", async (c) => {
     return c.json({ error: "Provider not found" }, HTTP_STATUS.NOT_FOUND);
 
   const provider = dbUtils.getProviderById(providerId);
-  const normalizedBaseUrl = normalizeBaseUrl(provider.name, provider.base_url);
+  const normalizedBaseUrl = provider.base_url || null;
   if (normalizedBaseUrl !== provider.base_url)
     dbUtils.updateProvider(providerId, { baseUrl: normalizedBaseUrl });
 
@@ -207,7 +190,7 @@ providersRouter.post("/:id/refresh-models", async (c) => {
         providerId,
         model.model_id,
         model.display_name,
-        getDefaultEnabledForProvider(provider.name, model.enabled),
+        model.enabled,
         model.model_type || "text"
       );
       if (model.metadata) dbUtils.setModelMetadata(modelId, model.metadata);
@@ -241,7 +224,7 @@ const MODEL_FETCHERS = {
   lmstudio: (url) => fetchOpenAICompatibleModels(url, "LM Studio"),
   "llama-cpp": (url) => fetchOpenAICompatibleModels(url, "llama.cpp server"),
   llamafile: (url) => fetchOpenAICompatibleModels(url, "llamafile server"),
-  replicate: (_baseUrl, apiKey) => fetchReplicateImageModels(apiKey),
+  omlx: (url) => fetchOpenAICompatibleModels(url, "oMLX"),
 };
 
 async function fetchModelsForProvider(

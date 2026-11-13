@@ -41,7 +41,8 @@ export default function MessageAttachment({ fileId }) {
     );
   }
 
-  const isImage = fileMetadata.mimeType?.startsWith("image/");
+  const isImage =
+    fileMetadata.meta?.type !== "generated-document" && fileMetadata.mimeType?.startsWith("image/");
   const isGenerated = fileMetadata.meta?.type === "generated";
 
   // Render images inline
@@ -90,15 +91,17 @@ export default function MessageAttachment({ fileId }) {
     );
   }
 
-  // Non-image files: show download button
   return (
-    <button
-      onClick={handleDownload}
+    <a
+      href={`${API_BASE}/api/files/${fileId}/content`}
+      download={fileMetadata.filename}
+      target="_blank"
+      rel="noopener"
       className="bg-theme-surface hover:bg-theme-surface-strong text-theme-text inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors">
       <File size={16} />
       <span className="max-w-[200px] truncate">{fileMetadata.filename}</span>
       <span className="text-theme-text-muted text-xs">{fileMetadata.sizeFormatted}</span>
       <Download size={14} />
-    </button>
+    </a>
   );
 }

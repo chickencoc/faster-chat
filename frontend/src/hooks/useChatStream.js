@@ -8,7 +8,11 @@ import {
   hasTextContent,
 } from "@/lib/messageUtils";
 import { buildTokenStats } from "@/lib/tokenStats";
+import { useAuthState } from "@/state/useAuthState";
+import { useUiState } from "@/state/useUiState";
 import { MESSAGE_CONSTANTS } from "@faster-chat/shared";
+import { useQueryClient } from "@tanstack/react-query";
+import { chatKeys } from "./queryKeys";
 
 function trimMessageHistory(messages) {
   return messages.slice(-MESSAGE_CONSTANTS.MAX_HISTORY).filter((message) => {
@@ -31,13 +35,19 @@ function formatMessagesForTransport(messages) {
 export function useChatStream({
   chatId,
   model,
+  reasoningEffort,
+  imageGenerationModel,
   webSearchEnabled,
   memoryEnabled,
   persistedMessages,
   onMessageComplete,
 }) {
+  const userId = useAuthState((state) => state.user?.id);
+  const queryClient = useQueryClient();
   const modelRef = useRef(model);
   modelRef.current = model;
+  const openAIOptions = useRef(null);
+  openAIOptions.current = { reasoningEffort, imageGenerationModel };
 
   const webSearchRef = useRef(webSearchEnabled);
   webSearchRef.current = webSearchEnabled;
@@ -49,6 +59,7 @@ export function useChatStream({
   persistedMessagesRef.current = persistedMessages;
 
   const messageTimestampsRef = useRef(new Map());
+  const regeneratingId = useRef(null);
 
   const timingRef = useRef({ sendAt: null, ttftMs: null });
   const resetTiming = () => {
@@ -63,7 +74,17 @@ export function useChatStream({
     () =>
       new DefaultChatTransport({
         api: `/api/chats/${chatId}/completion`,
-        prepareSendMessagesRequest: ({ messages: outgoingMessages }) => {
+        fetch: async (input, init) => {
+          const response = await fetch(input, init);
+          if (response.ok) {
+            queryClient.invalidateQueries({
+              queryKey: chatKeys.detail(userId, chatId),
+              exact: true,
+            });
+          }
+          return response;
+        },
+        prepareSendMessagesRequest: ({ messages: outgoingMessages, trigger }) => {
           const persistedForTransport = (persistedMessagesRef.current ?? []).map((msg) => ({
             id: msg.id,
             role: msg.role,
@@ -73,11 +94,17 @@ export function useChatStream({
 
           const persistedIds = new Set(persistedForTransport.map((m) => m.id));
           const newMessages = (outgoingMessages ?? []).filter((m) => !persistedIds.has(m.id));
-          const normalized = formatMessagesForTransport([...persistedForTransport, ...newMessages]);
+          const normalized = formatMessagesForTransport(
+            trigger === "regenerate-message"
+              ? outgoingMessages
+              : [...persistedForTransport, ...newMessages]
+          );
+          useUiState.getState().rememberModel(userId, "text", modelRef.current);
 
           return {
             body: {
               model: modelRef.current,
+              ...openAIOptions.current,
               systemPromptId: "default",
               messages: normalized,
               webSearch: webSearchRef.current,
@@ -86,11 +113,12 @@ export function useChatStream({
           };
         },
       }),
-    [chatId]
+    [chatId, queryClient, userId]
   );
 
   const {
     messages: streamingMessages,
+    setMessages,
     sendMessage,
     regenerate,
     status,
@@ -101,14 +129,23 @@ export function useChatStream({
     id: chatId,
     messages: [],
     transport,
-    onFinish: async ({ message }) => {
+    onFinish: async ({ message, isAbort, isError }) => {
+      const replacedMessageId = regeneratingId.current;
+      if (replacedMessageId && (isAbort || isError)) return;
       const content = message.parts
         .filter((part) => part.type === "text")
         .map((part) => part.text)
         .join("");
 
-      const toolParts =
-        message.parts?.filter((p) => p.type === "tool-invocation" && p.state === "result") || [];
+      const toolParts = message.parts.filter(
+        (part) =>
+          part.type === "source-url" || (part.type === "tool-invocation" && part.state === "result")
+      );
+      const fileIds = message.metadata?.fileIds ?? [];
+      const generatedFileDownloadFailed = message.metadata?.generatedFileDownloadFailed;
+      const reasoning = message.parts
+        .filter((part) => part.type === "reasoning" && part.text.trim())
+        .map((part) => part.text);
 
       const { sendAt, ttftMs } = timingRef.current;
       const stats = buildTokenStats({
@@ -119,13 +156,17 @@ export function useChatStream({
 
       const metadata = {
         ...(toolParts.length > 0 ? { toolParts } : {}),
+        ...(reasoning.length > 0 ? { reasoning } : {}),
+        ...(generatedFileDownloadFailed && { generatedFileDownloadFailed }),
         ...(stats ? { stats } : {}),
       };
 
-      if (onMessageComplete && content.trim()) {
+      if (onMessageComplete && (content.trim() || fileIds.length || generatedFileDownloadFailed)) {
         await onMessageComplete({
           id: message.id,
+          replacedMessageId,
           content,
+          fileIds,
           metadata: Object.keys(metadata).length > 0 ? metadata : null,
           createdAt: getMessageTimestamp(message),
         });
@@ -147,10 +188,13 @@ export function useChatStream({
   const streamingMessagesWithModel = streamingMessages.map((msg) => ({
     ...ensureTimestamp(msg, messageTimestampsRef),
     model: msg.role === "assistant" ? modelRef.current : msg.model,
+    fileIds: msg.fileIds ?? msg.metadata?.fileIds,
   }));
 
   const messages = isStreaming
-    ? deduplicateMessages([...formattedMessages, ...streamingMessagesWithModel])
+    ? deduplicateMessages([...formattedMessages, ...streamingMessagesWithModel]).filter(
+        (message) => message.id !== regeneratingId.current
+      )
     : formattedMessages;
 
   async function send({ id, content, fileIds = [], createdAt }) {
@@ -167,8 +211,16 @@ export function useChatStream({
   }
 
   async function regenerateWithTiming() {
+    const previous = formattedMessages.at(-1);
+    if (previous?.role !== "assistant" || regeneratingId.current) return;
+    regeneratingId.current = previous.id;
+    setMessages(formattedMessages);
     resetTiming();
-    await regenerate();
+    try {
+      await regenerate({ messageId: previous.id });
+    } finally {
+      regeneratingId.current = null;
+    }
   }
 
   return {

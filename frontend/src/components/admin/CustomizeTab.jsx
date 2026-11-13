@@ -79,7 +79,7 @@ const CustomizeTab = () => {
                   onInput={(e) => setLocalAppName(e.target.value)}
                   placeholder="Faster Chat"
                   maxLength={UI_CONSTANTS.APP_NAME_MAX_LENGTH}
-                  className="border-theme-surface-strong bg-theme-canvas text-theme-text placeholder-theme-text-muted focus:border-theme-blue w-full rounded-lg border px-4 py-2 text-sm focus:outline-none"
+                  className="border-theme-surface-strong bg-theme-canvas text-theme-text placeholder-theme-text-muted focus:border-theme-primary w-full rounded-lg border px-4 py-2 text-sm focus:outline-none"
                 />
                 <p className="text-theme-text-muted mt-1 text-xs">
                   This name appears in the sidebar header and browser tab.
@@ -107,7 +107,7 @@ const CustomizeTab = () => {
                         type="button"
                         onClick={() => setLocalLogoIcon(iconName)}
                         title={iconName}
-                        className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-all ${
+                        className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-colors duration-150 ${
                           isSelected
                             ? "border-theme-primary bg-theme-primary/10 text-theme-primary"
                             : "border-theme-surface-strong bg-theme-canvas text-theme-text-muted hover:border-theme-primary/50 hover:text-theme-text"
@@ -131,7 +131,7 @@ const CustomizeTab = () => {
             <Button
               onClick={handleSave}
               disabled={!hasUnsavedChanges || updateMutation.isPending || isFetching}
-              color="blue">
+              color="theme">
               {updateMutation.isPending ? (
                 "Saving..."
               ) : saveStatus === "success" ? (
@@ -145,7 +145,7 @@ const CustomizeTab = () => {
             </Button>
 
             {hasUnsavedChanges && (
-              <Button onClick={handleReset} color="plain">
+              <Button onClick={handleReset} plain>
                 <RotateCcw size={ICON_SIZE.MD} className="mr-1" />
                 Reset
               </Button>

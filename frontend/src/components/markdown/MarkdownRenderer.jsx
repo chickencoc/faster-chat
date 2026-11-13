@@ -186,16 +186,39 @@ const MARKDOWN_COMPONENTS = {
   code: CodeBlock,
   p: ({ children }) => <div className="markdown-block">{children}</div>,
   pre: ({ children }) => <div className="markdown-block">{children}</div>,
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer noopener"
-      className="text-theme-blue inline-flex items-center gap-1 underline-offset-4 hover:underline">
-      {children}
-      <ExternalLink className="h-3 w-3" />
-    </a>
+  table: ({ children }) => (
+    <div className="my-4 max-w-full overflow-x-auto [&_a]:inline [&_a_svg]:ms-1 [&_a_svg]:inline-block [&_a_svg]:align-baseline">
+      <table className="w-full border-collapse text-start">{children}</table>
+    </div>
   ),
+  thead: ({ children }) => <thead className="border-theme-border border-b">{children}</thead>,
+  tbody: ({ children }) => <tbody className="divide-theme-border divide-y">{children}</tbody>,
+  th: ({ children, style }) => (
+    <th
+      scope="col"
+      style={style}
+      className="px-3 py-2 text-start align-top font-semibold first:pl-0 last:pr-0">
+      {children}
+    </th>
+  ),
+  td: ({ children, style }) => (
+    <td style={style} className="px-3 py-2 text-start align-top first:pl-0 last:pr-0">
+      {children}
+    </td>
+  ),
+  a: ({ href, children }) =>
+    href ? (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="text-theme-blue inline-flex items-center gap-1 underline-offset-4 hover:underline">
+        {children}
+        <ExternalLink className="h-3 w-3" />
+      </a>
+    ) : (
+      children
+    ),
 };
 
 /**

@@ -1,6 +1,8 @@
 import { IMAGE_GENERATION } from "@faster-chat/shared";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { useAuthState } from "@/state/useAuthState";
+import { chatKeys } from "./queryKeys";
 
 async function generateImage({
   prompt,
@@ -9,6 +11,7 @@ async function generateImage({
   model,
   numImages = IMAGE_GENERATION.DEFAULT_NUM_IMAGES,
   referenceFileIds,
+  complexity,
 }) {
   return apiFetch("/api/images/generate", {
     method: "POST",
@@ -18,6 +21,7 @@ async function generateImage({
       chatId,
       modelId: model,
       numImages,
+      complexity,
       ...(referenceFileIds && { referenceFileIds }),
     }),
   });
@@ -28,10 +32,17 @@ async function fetchImageStatus() {
 }
 
 export function useImageGeneration({ onSuccess, onError } = {}) {
+  const userId = useAuthState((state) => state.user?.id);
+  const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: generateImage,
     onSuccess,
     onError,
+    onSettled: (_data, _error, { chatId }) => {
+      if (chatId) {
+        queryClient.invalidateQueries({ queryKey: chatKeys.detail(userId, chatId), exact: true });
+      }
+    },
   });
 
   return {

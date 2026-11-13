@@ -162,7 +162,7 @@ const PullModelModal = ({ isOpen, onClose, provider, onSuccess }) => {
             placeholder="e.g., llama3.2, codellama:7b, mistral"
             disabled={isPulling}
             autoFocus
-            className="border-theme-surface bg-theme-canvas text-theme-text placeholder:text-theme-text-muted focus:border-theme-blue focus:ring-theme-blue w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:ring-2 focus:outline-none disabled:opacity-50"
+            className="border-theme-surface bg-theme-canvas text-theme-text placeholder:text-theme-text-muted focus:border-theme-primary focus:ring-theme-primary w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:ring-2 focus:outline-none disabled:opacity-50"
           />
           <p className="text-theme-text-muted mt-1 text-xs">
             Enter the model name from{" "}
@@ -170,7 +170,7 @@ const PullModelModal = ({ isOpen, onClose, provider, onSuccess }) => {
               href="https://ollama.com/library"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-theme-blue hover:underline">
+              className="text-theme-primary hover:underline">
               ollama.com/library
             </a>
           </p>
@@ -187,7 +187,7 @@ const PullModelModal = ({ isOpen, onClose, provider, onSuccess }) => {
             {progress.percentage !== undefined && (
               <div className="bg-theme-surface h-2 overflow-hidden rounded-full">
                 <div
-                  className="bg-theme-blue h-full transition-all duration-300"
+                  className="bg-theme-primary h-full transition-[width] duration-150"
                   style={{ width: `${progress.percentage}%` }}
                 />
               </div>
@@ -225,7 +225,7 @@ const PullModelModal = ({ isOpen, onClose, provider, onSuccess }) => {
           <button
             type="submit"
             disabled={isPulling || !modelName.trim() || isComplete}
-            className="bg-theme-blue hover:bg-theme-blue/90 disabled:bg-theme-blue/50 flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium text-white transition-colors disabled:cursor-not-allowed">
+            className="bg-theme-primary hover:bg-theme-primary/90 disabled:bg-theme-primary/50 dark:text-theme-canvas-strong flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium text-white transition-colors disabled:cursor-not-allowed">
             {isPulling ? (
               <>
                 <Loader className="h-4 w-4 animate-spin" />

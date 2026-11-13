@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterAll, mock } from "bun:test";
+import { describe, test, expect, beforeEach, mock } from "bun:test";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
@@ -20,14 +20,24 @@ const { createTestApp, resetDatabase, seedAdminUser, createTestUser, makeRequest
   await import("./helpers.js");
 const { dbUtils } = await import("../lib/db.js");
 
-const originalReplicateApiKey = process.env.REPLICATE_API_KEY;
+const { encryptApiKey } = await import("../lib/encryption.js");
+
+function providerKey() {
+  const { encryptedKey, iv, authTag } = encryptApiKey("test-key");
+  return [encryptedKey, iv, authTag];
+}
+
+function seedImageModel() {
+  const providerId = dbUtils.createProvider("openai", "OpenAI", "official", null, ...providerKey());
+  dbUtils.createModel(providerId, "gpt-image-2.6-flare", "GPT Image 2.6 Flare", true, "image");
+}
 
 describe("image routes", () => {
   let app, adminCookie;
 
   beforeEach(async () => {
     resetDatabase();
-    process.env.REPLICATE_API_KEY = "test-key";
+    seedImageModel();
     generateImageForProviderImpl = async () => ({
       buffer: Buffer.from("image"),
       mimeType: "image/png",
@@ -36,14 +46,6 @@ describe("image routes", () => {
     app = createTestApp();
     const admin = await seedAdminUser(app);
     adminCookie = admin.cookie;
-  });
-
-  afterAll(() => {
-    if (originalReplicateApiKey === undefined) {
-      delete process.env.REPLICATE_API_KEY;
-    } else {
-      process.env.REPLICATE_API_KEY = originalReplicateApiKey;
-    }
   });
 
   test("POST /api/images/generate reports a failed batch as 502 with a normalized reason", async () => {
@@ -110,11 +112,11 @@ describe("image routes", () => {
 });
 
 describe("aspect ratio and provider options", () => {
-  let app, adminCookie, factoryCalls;
+  let app, adminCookie, adminId, factoryCalls;
 
   beforeEach(async () => {
     resetDatabase();
-    process.env.REPLICATE_API_KEY = "test-key";
+    seedImageModel();
     factoryCalls = [];
     generateImageForProviderImpl = async (...args) => {
       factoryCalls.push(args);
@@ -124,6 +126,7 @@ describe("aspect ratio and provider options", () => {
     app = createTestApp();
     const admin = await seedAdminUser(app);
     adminCookie = admin.cookie;
+    adminId = admin.user.id;
   });
 
   const generate = (body) =>
@@ -134,6 +137,21 @@ describe("aspect ratio and provider options", () => {
 
     expect(res.status).toBe(200);
     expect(factoryCalls[0][2].aspectRatio).toBe("16:9");
+  });
+
+  test("remembers the image model and complexity without replacing chat settings", async () => {
+    dbUtils.createChat("image-chat", adminId);
+    dbUtils.updateChatModelSettings("image-chat", adminId, "gpt-6.1-terra", "xhigh");
+
+    const res = await generate({ prompt: "a cube", chatId: "image-chat", complexity: "low" });
+    expect(res.status).toBe(200);
+    const chat = await makeRequest(app, "GET", "/api/chats/image-chat", { cookie: adminCookie });
+    expect(await chat.json()).toMatchObject({
+      lastModel: "gpt-6.1-terra",
+      reasoningEffort: "xhigh",
+      lastImageModel: "gpt-image-2.6-flare",
+      imageComplexity: "low",
+    });
   });
 
   test("defaults to 1:1 when no aspect ratio is sent", async () => {
@@ -150,7 +168,6 @@ describe("aspect ratio and provider options", () => {
   });
 
   test("local provider with a base URL and no key reaches the factory", async () => {
-    delete process.env.REPLICATE_API_KEY;
     const providerId = dbUtils.createProvider(
       "sd-server",
       "SD Server",
@@ -178,7 +195,7 @@ describe("batch generation", () => {
 
   beforeEach(async () => {
     resetDatabase();
-    process.env.REPLICATE_API_KEY = "test-key";
+    seedImageModel();
     factoryCalls = [];
     generateImageForProviderImpl = async (...args) => {
       factoryCalls.push(args);
@@ -323,7 +340,7 @@ describe("reference image validation", () => {
 
   beforeEach(async () => {
     resetDatabase();
-    process.env.REPLICATE_API_KEY = "test-key";
+    seedImageModel();
     factoryCalls = [];
     generateImageForProviderImpl = async (...args) => {
       factoryCalls.push(args);
@@ -375,10 +392,10 @@ describe("reference image validation", () => {
 
   test("rejects references on a model without image-to-image, naming the model", async () => {
     const providerId = dbUtils.createProvider(
-      "replicate",
-      "Replicate",
-      "replicate",
-      null,
+      "local-image",
+      "Local Image",
+      "openai-compatible",
+      "http://localhost:1234/v1",
       null,
       null,
       null
@@ -400,7 +417,13 @@ describe("reference image validation", () => {
   });
 
   test("forwards owned image references to the factory as buffers", async () => {
-    const providerId = dbUtils.createProvider("google", "Google", "google", null, null, null, null);
+    const providerId = dbUtils.createProvider(
+      "google",
+      "Google",
+      "official",
+      null,
+      ...providerKey()
+    );
     dbUtils.createModel(providerId, "gemini-image", "Gemini Image", true, "image");
     const refId = await seedReferenceFile({ userId: adminId, content: "ref-bytes" });
 
@@ -419,7 +442,13 @@ describe("reference image validation", () => {
   });
 
   test("records the reference ids and prompt in the generated file meta", async () => {
-    const providerId = dbUtils.createProvider("google", "Google", "google", null, null, null, null);
+    const providerId = dbUtils.createProvider(
+      "google",
+      "Google",
+      "official",
+      null,
+      ...providerKey()
+    );
     dbUtils.createModel(providerId, "gemini-image", "Gemini Image", true, "image");
     const refId = await seedReferenceFile({ userId: adminId });
 

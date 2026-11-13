@@ -39,10 +39,10 @@ export const chatsClient = {
     return chatsFetch(`/${chatId}`);
   },
 
-  async createChat(id = null, title = null, folderId = null) {
+  async createChat(id = null, title = null, folderId = null, message, memoryDisabled = false) {
     return chatsFetch("", {
       method: "POST",
-      body: JSON.stringify({ id, title, folder_id: folderId }),
+      body: JSON.stringify({ id, title, folder_id: folderId, message, memoryDisabled }),
     });
   },
 

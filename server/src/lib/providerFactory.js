@@ -1,16 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
-import { createAzure } from "@ai-sdk/azure";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { createVertex } from "@ai-sdk/google-vertex";
-import { createMistral } from "@ai-sdk/mistral";
-import { createGroq } from "@ai-sdk/groq";
-import { createCohere } from "@ai-sdk/cohere";
-import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
-import { createXai } from "@ai-sdk/xai";
-import { createDeepSeek } from "@ai-sdk/deepseek";
-import { createCerebras } from "@ai-sdk/cerebras";
-import { createFireworks } from "@ai-sdk/fireworks";
 import { PROVIDER_DEFAULTS, shouldUseChatMethod } from "@faster-chat/shared";
 
 /**
@@ -19,76 +9,17 @@ import { PROVIDER_DEFAULTS, shouldUseChatMethod } from "@faster-chat/shared";
  */
 const PROVIDER_FACTORIES = {
   anthropic: (config) => createAnthropic({ apiKey: config.apiKey }),
-
   openai: (config) => createOpenAI({ apiKey: config.apiKey }),
-
-  azure: (config) =>
-    createAzure({
-      apiKey: config.apiKey,
-      resourceName: config.baseUrl || process.env.AZURE_RESOURCE_NAME,
-    }),
-
   google: (config) => createGoogleGenerativeAI({ apiKey: config.apiKey }),
-
-  "google-vertex": (_config) =>
-    createVertex({
-      project: process.env.GOOGLE_VERTEX_PROJECT,
-      location: process.env.GOOGLE_VERTEX_LOCATION || PROVIDER_DEFAULTS.GOOGLE_VERTEX_LOCATION,
-    }),
-
-  mistral: (config) => createMistral({ apiKey: config.apiKey }),
-
-  groq: (config) => createGroq({ apiKey: config.apiKey }),
-
-  cohere: (config) => createCohere({ apiKey: config.apiKey }),
-
-  "amazon-bedrock": (_config) =>
-    createAmazonBedrock({
-      region: process.env.AWS_REGION || PROVIDER_DEFAULTS.AWS_REGION,
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    }),
-
-  xai: (config) => createXai({ apiKey: config.apiKey }),
-
-  deepseek: (config) => createDeepSeek({ apiKey: config.apiKey }),
-
-  cerebras: (config) => createCerebras({ apiKey: config.apiKey }),
-
-  fireworks: (config) => createFireworks({ apiKey: config.apiKey }),
-
   ollama: (config) =>
     createOpenAI({
       baseURL: config.baseUrl || PROVIDER_DEFAULTS.OLLAMA_BASE_URL,
       apiKey: config.apiKey || "ollama",
     }),
-
-  openrouter: (config) =>
-    createOpenAI({
-      baseURL: config.baseUrl || "https://openrouter.ai/api/v1",
-      apiKey: config.apiKey,
-    }),
 };
 
-const PDF_CAPABLE_PROVIDERS = new Set([
-  "anthropic",
-  "openai",
-  "mistral",
-  "google",
-  "google-vertex",
-]);
-const IMAGE_CAPABLE_PROVIDERS = new Set([
-  "anthropic",
-  "openai",
-  "mistral",
-  "groq",
-  "google",
-  "google-vertex",
-  "xai",
-  "deepseek",
-  "cerebras",
-  "fireworks",
-]);
+const PDF_CAPABLE_PROVIDERS = new Set(["anthropic", "openai", "google"]);
+const IMAGE_CAPABLE_PROVIDERS = new Set(["anthropic", "openai", "google"]);
 
 export function providerSupportsNativePdf(providerName) {
   return PDF_CAPABLE_PROVIDERS.has(providerName);

@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { chatsClient } from "@/lib/chatsClient";
+import { useUiState } from "@/state/useUiState";
 import { useAuthState } from "@/state/useAuthState";
 import { getMessageTimestamp } from "@/lib/messageUtils";
 import { toCanonicalMessage } from "@/lib/messageShape.js";
 import { sortChatsLikeServer } from "@/lib/chatSort.js";
 import { chatKeys, folderKeys } from "./queryKeys";
+import { useChatNavigation } from "./useChatNavigation";
 
 // Re-export for backward compatibility
 export { chatKeys };
@@ -21,42 +23,41 @@ export function useChatsQuery() {
 
 export function useChatQuery(chatId) {
   const userId = useAuthState((state) => state.user?.id ?? null);
-
-  return useQuery({
+  const draft = useUiState((state) => state.draftChat);
+  const isDraft = draft?.id === chatId && draft?.userId === userId;
+  const query = useQuery({
     queryKey: chatKeys.detail(userId, chatId),
     queryFn: () => chatsClient.getChat(chatId),
-    enabled: userId !== null && !!chatId,
+    enabled: userId !== null && !!chatId && !isDraft,
   });
+  return isDraft ? { ...query, data: draft, isLoading: false, isError: false } : query;
 }
 
 export function useMessagesQuery(chatId) {
   const userId = useAuthState((state) => state.user?.id ?? null);
-
-  return useQuery({
+  const draft = useUiState((state) => state.draftChat);
+  const isDraft = draft?.id === chatId && draft?.userId === userId;
+  const query = useQuery({
     queryKey: chatKeys.messages(userId, chatId),
     queryFn: () => chatsClient.getMessages(chatId),
     select: (messages) => messages.map(toCanonicalMessage),
-    enabled: userId !== null && !!chatId,
+    enabled: userId !== null && !!chatId && !isDraft,
   });
+  return isDraft ? { ...query, data: query.data ?? [], isLoading: false, isError: false } : query;
 }
 
 export function useCreateChatMutation() {
-  const queryClient = useQueryClient();
   const userId = useAuthState((state) => state.user?.id ?? null);
-
   return useMutation({
-    mutationFn: ({ id, title, folderId } = {}) => chatsClient.createChat(id, title, folderId),
-    onSuccess: (newChat, { folderId } = {}) => {
-      queryClient.setQueryData(chatKeys.list(userId), (old) => {
-        if (!old) {
-          return [newChat];
-        }
-        return sortChatsLikeServer([newChat, ...old]);
-      });
-      // Invalidate folder chats if created in a folder
-      if (folderId) {
-        queryClient.invalidateQueries({ queryKey: folderKeys.chats(userId, folderId) });
-      }
+    mutationFn: async ({ id, title, folderId } = {}) => ({
+      id: id || crypto.randomUUID(),
+      title: title || null,
+      folderId: folderId || null,
+      userId,
+      memoryDisabled: false,
+    }),
+    onSuccess: (draft) => {
+      useUiState.getState().setDraftChat(draft);
     },
   });
 }
@@ -104,9 +105,33 @@ export function useDeleteChatMutation() {
 export function useCreateMessageMutation() {
   const queryClient = useQueryClient();
   const userId = useAuthState((state) => state.user?.id ?? null);
+  const { finishDraft } = useChatNavigation();
 
   return useMutation({
-    mutationFn: ({ chatId, message }) => chatsClient.createMessage(chatId, message),
+    mutationFn: async ({ chatId, message }) => {
+      const draft = useUiState.getState().draftChat;
+      if (draft?.id !== chatId || draft.userId !== userId) {
+        return chatsClient.createMessage(chatId, message);
+      }
+      const { firstMessage, ...chat } = await chatsClient.createChat(
+        chatId,
+        draft.title,
+        draft.folderId,
+        message,
+        draft.memoryDisabled
+      );
+      queryClient.setQueryData(chatKeys.detail(userId, chatId), chat);
+      if (!draft.folderId) {
+        queryClient.setQueryData(chatKeys.list(userId), (old) =>
+          sortChatsLikeServer([chat, ...(old || [])])
+        );
+      }
+      if (draft.folderId) {
+        queryClient.invalidateQueries({ queryKey: folderKeys.chats(userId, draft.folderId) });
+      }
+      await finishDraft(chatId);
+      return firstMessage;
+    },
 
     onMutate: async ({ chatId, message }) => {
       // Cancel outgoing refetches to avoid overwriting optimistic update
@@ -176,9 +201,7 @@ export function useCreateMessageMutation() {
 
     onError: (_error, { chatId }, context) => {
       // Roll back to previous state
-      if (context?.previousMessages) {
-        queryClient.setQueryData(chatKeys.messages(userId, chatId), context.previousMessages);
-      }
+      queryClient.setQueryData(chatKeys.messages(userId, chatId), context?.previousMessages ?? []);
       if (context?.previousChats) {
         queryClient.setQueryData(chatKeys.list(userId), context.previousChats);
       }

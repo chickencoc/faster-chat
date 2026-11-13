@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { render, waitFor } from "@testing-library/preact";
+import { render, waitFor, act } from "@testing-library/preact";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { toast } from "sonner";
 
@@ -10,6 +10,13 @@ const mockGenerate = vi.fn((vars, opts) => {
 });
 let imageGenHookOptions = null;
 let inputAreaProps = null;
+let chatOptions = null;
+let textModels = [];
+let imageModels = [];
+let imageMode;
+let lastUsedModels;
+let modelSelectorProps;
+const rememberModel = vi.fn();
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
@@ -19,11 +26,10 @@ vi.mock("sonner", () => ({
 vi.mock("@/state/useUiState", () => ({
   useUiState: (selector) =>
     selector({
-      preferredModel: "claude",
       setPreferredModel: vi.fn(),
-      imageMode: true,
-      preferredImageModel: "flux",
-      setPreferredImageModel: vi.fn(),
+      imageMode,
+      lastUsedModels,
+      rememberModel,
       imageAspectRatio: "1:1",
       setImageAspectRatio: vi.fn(),
       imageCount: 3,
@@ -35,25 +41,32 @@ vi.mock("@/state/useUiState", () => ({
     }),
 }));
 
+vi.mock("@/state/useAuthState", () => ({
+  useAuthState: (selector) => selector({ user: { id: 7 } }),
+}));
+
 vi.mock("@/hooks/useChat", () => ({
-  useChat: () => ({
-    messages: [],
-    input: "",
-    inputFiles: [],
-    appendFiles: vi.fn(),
-    removeFile: vi.fn(),
-    clearFiles: vi.fn(),
-    handleInputChange: vi.fn(),
-    handleSubmit: vi.fn(),
-    submitMessage: vi.fn(),
-    error: null,
-    clearError: vi.fn(),
-    isLoading: false,
-    status: "ready",
-    stop: vi.fn(),
-    regenerate: vi.fn(),
-    setInput: vi.fn(),
-  }),
+  useChat: (options) => {
+    chatOptions = options;
+    return {
+      messages: [],
+      input: "",
+      inputFiles: [],
+      appendFiles: vi.fn(),
+      removeFile: vi.fn(),
+      clearFiles: vi.fn(),
+      handleInputChange: vi.fn(),
+      handleSubmit: vi.fn(),
+      submitMessage: vi.fn(),
+      error: null,
+      clearError: vi.fn(),
+      isLoading: false,
+      status: "ready",
+      stop: vi.fn(),
+      regenerate: vi.fn(),
+      setInput: vi.fn(),
+    };
+  },
 }));
 
 vi.mock("@/hooks/useChatVoice", () => ({
@@ -87,7 +100,11 @@ vi.mock("@/lib/providersClient", () => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: { models: [] } }),
+  useQuery: ({ queryKey }) => ({
+    data: {
+      models: queryKey[1] === "text" ? textModels : imageModels,
+    },
+  }),
 }));
 
 vi.mock("@/components/layout/SidebarToolbar", () => ({
@@ -108,8 +125,15 @@ vi.mock("@/components/ui/UserMenu", () => ({
 vi.mock("@/components/chat/MessageList", () => ({
   default: () => <div data-testid="message-list" />,
 }));
-vi.mock("@/components/chat/ModelSelector", () => ({
-  default: () => <div data-testid="model-selector" />,
+vi.mock("@/components/chat/ModelSelector", async (importOriginal) => ({
+  ...(await importOriginal()),
+  default: (props) => {
+    modelSelectorProps = props;
+    return <div data-testid="model-selector" />;
+  },
+}));
+vi.mock("@/components/chat/EffortSelector", () => ({
+  default: () => null,
 }));
 vi.mock("@/components/chat/VoiceSettings", () => ({
   default: () => null,
@@ -120,7 +144,7 @@ vi.mock("@/components/chat/VoiceStatusIndicator", () => ({
 vi.mock("@/components/chat/InputArea", () => ({
   default: (props) => {
     inputAreaProps = props;
-    return <div data-testid="input-area" />;
+    return <div data-testid="input-area">{props.modelSelector}</div>;
   },
 }));
 
@@ -129,8 +153,72 @@ describe("ChatInterface image generation", () => {
     vi.clearAllMocks();
     imageGenHookOptions = null;
     inputAreaProps = null;
+    textModels = [{ model_id: "gpt-default", is_default: true }];
+    imageModels = [{ model_id: "flux", is_default: true }];
+    imageMode = true;
+    modelSelectorProps = null;
+    lastUsedModels = {};
     mockGenerate.lastVars = null;
     mockGenerate.lastOnSuccess = null;
+  });
+
+  test("uses the enabled default model for requests when the stored model is unavailable", () => {
+    lastUsedModels = { 7: { text: "claude" } };
+    render(<ChatInterface chatId="new-chat" />);
+    expect(chatOptions.model).toBe("gpt-default");
+  });
+
+  test("uses the current user's last model ahead of the administrator default", () => {
+    textModels.push({ model_id: "claude", is_default: false });
+    lastUsedModels = { 7: { text: "claude" }, 8: { text: "gpt-default" } };
+    render(<ChatInterface chatId="new-chat" />);
+    expect(chatOptions.model).toBe("claude");
+  });
+
+  test("uses the room's model and reasoning effort ahead of browser settings", () => {
+    textModels.push({ model_id: "gpt-6.1-terra", provider: "openai", is_default: false });
+    lastUsedModels = { 7: { text: "gpt-default" } };
+    render(
+      <ChatInterface
+        chatId="existing-chat"
+        chat={{ lastModel: "gpt-6.1-terra", reasoningEffort: "xhigh" }}
+      />
+    );
+    expect(chatOptions.model).toBe("gpt-6.1-terra");
+    expect(chatOptions.reasoningEffort).toBe("xhigh");
+  });
+
+  test("falls back to the browser model if the room model is disabled", () => {
+    textModels.push({ model_id: "claude", is_default: false });
+    lastUsedModels = { 7: { text: "claude" } };
+    render(<ChatInterface chatId="existing-chat" chat={{ lastModel: "disabled" }} />);
+    expect(chatOptions.model).toBe("claude");
+  });
+
+  test("an unsent model change affects only the current chat", () => {
+    imageMode = false;
+    textModels.push({ model_id: "claude", is_default: false });
+    const { rerender } = render(<ChatInterface key="first" chatId="first" />);
+    act(() => modelSelectorProps.onModelChange("claude"));
+    expect(chatOptions.model).toBe("claude");
+    rerender(<ChatInterface key="second" chatId="second" />);
+    expect(chatOptions.model).toBe("gpt-default");
+  });
+
+  test("uses the room's last image model and complexity on image submission", async () => {
+    imageModels.push({ model_id: "gpt-image-2.6-flare", provider: "openai" });
+    render(
+      <ChatInterface
+        chatId="existing-chat"
+        chat={{ lastImageModel: "gpt-image-2.6-flare", imageComplexity: "low" }}
+      />
+    );
+    inputAreaProps.onImageSubmit("a cube");
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalled());
+    expect(mockGenerate.lastVars).toMatchObject({
+      model: "gpt-image-2.6-flare",
+      complexity: "low",
+    });
   });
 
   const submitImage = async (prompt = "a cube", referenceFiles = undefined) => {
@@ -149,6 +237,7 @@ describe("ChatInterface image generation", () => {
       aspectRatio: "1:1",
       numImages: 3,
     });
+    expect(rememberModel).toHaveBeenCalledWith(7, "image", "flux");
 
     await mockGenerate.lastOnSuccess({
       images: [

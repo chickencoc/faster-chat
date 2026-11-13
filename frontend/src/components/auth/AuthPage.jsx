@@ -2,7 +2,6 @@ import { useState } from "preact/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthState } from "@/state/useAuthState";
 import { authClient } from "@/lib/authClient";
-import { Button } from "@/components/ui/button";
 
 const AuthPage = ({ inviteToken }) => {
   const { data: setup } = useQuery({
@@ -60,7 +59,7 @@ const AuthPage = ({ inviteToken }) => {
   return (
     <div className="bg-theme-canvas flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-md">
-        <div className="border-theme-surface bg-theme-canvas-alt rounded-lg border p-8 shadow-lg">
+        <div className="border-theme-surface bg-theme-canvas-alt rounded-xl border p-8 shadow-lg">
           <h1 className="text-theme-text mb-6 text-center text-2xl font-bold">
             {showRegister ? "Create Account" : "Sign In"}
           </h1>
@@ -87,7 +86,7 @@ const AuthPage = ({ inviteToken }) => {
                 required
                 minLength={3}
                 autoComplete="username"
-                className="border-theme-surface bg-theme-canvas text-theme-text focus:border-theme-blue focus:ring-theme-blue w-full rounded-md border px-3 py-2 focus:ring-1 focus:outline-none"
+                className="border-theme-border bg-theme-canvas text-theme-text focus:border-theme-primary focus:ring-theme-primary ease-snappy w-full rounded-lg border px-3 py-2 transition-colors duration-150 focus:ring-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isLoading}
               />
             </div>
@@ -106,7 +105,7 @@ const AuthPage = ({ inviteToken }) => {
                 required
                 minLength={8}
                 autoComplete={showRegister ? "new-password" : "current-password"}
-                className="border-theme-surface bg-theme-canvas text-theme-text focus:border-theme-blue focus:ring-theme-blue w-full rounded-md border px-3 py-2 focus:ring-1 focus:outline-none"
+                className="border-theme-border bg-theme-canvas text-theme-text focus:border-theme-primary focus:ring-theme-primary ease-snappy w-full rounded-lg border px-3 py-2 transition-colors duration-150 focus:ring-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isLoading}
               />
             </div>
@@ -126,7 +125,7 @@ const AuthPage = ({ inviteToken }) => {
                   required
                   minLength={8}
                   autoComplete="new-password"
-                  className="border-theme-surface bg-theme-canvas text-theme-text focus:border-theme-blue focus:ring-theme-blue w-full rounded-md border px-3 py-2 focus:ring-1 focus:outline-none"
+                  className="border-theme-border bg-theme-canvas text-theme-text focus:border-theme-primary focus:ring-theme-primary ease-snappy w-full rounded-lg border px-3 py-2 transition-colors duration-150 focus:ring-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isLoading}
                 />
               </div>
@@ -138,9 +137,12 @@ const AuthPage = ({ inviteToken }) => {
               </div>
             )}
 
-            <Button type="submit" color="blue" className="w-full" disabled={isLoading}>
+            <button
+              type="submit"
+              className="bg-theme-primary hover:bg-theme-accent focus-visible:ring-theme-primary focus-visible:ring-offset-theme-canvas-alt ease-snappy flex w-full cursor-pointer items-center justify-center rounded-xl px-4 py-2.5 font-semibold text-white shadow-md transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isLoading}>
               {isLoading ? "Please wait..." : showRegister ? "Create Account" : "Sign In"}
-            </Button>
+            </button>
           </form>
 
           {canRegister && (
@@ -148,7 +150,7 @@ const AuthPage = ({ inviteToken }) => {
               <button
                 type="button"
                 onClick={toggleMode}
-                className="text-theme-blue text-sm hover:underline"
+                className="text-theme-primary hover:text-theme-accent ease-snappy rounded-lg text-sm transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={isLoading}>
                 {showRegister
                   ? "Already have an account? Sign in"

@@ -5,7 +5,7 @@ import { memoryKeys } from "@/hooks/queryKeys";
 import { useAuthState } from "@/state/useAuthState";
 
 const inputClass =
-  "border-theme-surface-strong bg-theme-canvas text-theme-text placeholder-theme-text-muted focus:border-theme-blue w-full rounded-lg border px-4 py-2 text-sm focus:outline-none";
+  "border-theme-surface-strong bg-theme-canvas text-theme-text placeholder-theme-text-muted focus:border-theme-primary w-full rounded-lg border px-4 py-2 text-sm focus:outline-none";
 
 const MemoryAdminSection = () => {
   const queryClient = useQueryClient();
@@ -43,6 +43,7 @@ const MemoryAdminSection = () => {
             </p>
           </div>
           <Switch
+            color="theme"
             value={!!memoryConfig?.globalEnabled}
             onChange={(globalEnabled) => memoryMutation.mutate({ globalEnabled })}
             disabled={memoryMutation.isPending}

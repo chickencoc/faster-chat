@@ -34,10 +34,12 @@ initializeModelsDevCache()
 
 // Start server
 const port = parseInt(process.env.PORT || "3001", 10);
+const hostname = process.env.HOST || "0.0.0.0";
 
-console.log(`Server is running on http://localhost:${port}`);
+console.log(`Server is running on http://${hostname}:${port}`);
 
 serve({
   fetch: (request, connInfo) => app.fetch(request, connInfo),
   port,
+  hostname,
 });

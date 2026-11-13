@@ -88,7 +88,7 @@ const ConnectionsTab = () => {
             Manage AI provider connections and API keys
           </p>
         </div>
-        <Button onClick={() => setAddModalOpen(true)} color="blue">
+        <Button onClick={() => setAddModalOpen(true)} color="theme">
           <Plus className="h-5 w-5" />
           Add Connection
         </Button>
@@ -104,7 +104,7 @@ const ConnectionsTab = () => {
               <p className="text-theme-text-muted mt-2 text-sm">
                 Add your first AI provider to get started
               </p>
-              <Button onClick={() => setAddModalOpen(true)} color="blue" className="mt-4">
+              <Button onClick={() => setAddModalOpen(true)} color="theme" className="mt-4">
                 Add Connection
               </Button>
             </div>

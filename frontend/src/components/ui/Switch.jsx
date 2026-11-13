@@ -53,13 +53,14 @@ export const Switch = ({
         tabIndex={disabled ? -1 : 0}
         onKeyDown={onKeyEvent}
         className={clsx(
-          "switch-pseudo outline-theme-lavender relative inline-flex h-7 w-12 items-center overflow-hidden rounded-[20px] border-2 p-[2px] transition-colors",
+          "switch-pseudo outline-theme-primary ease-snappy relative inline-flex h-7 w-12 items-center overflow-hidden rounded-[20px] border-2 p-[2px] transition-colors duration-150",
           {
             "cursor-pointer": !disabled,
             "cursor-not-allowed": disabled,
             // Off state
             "border-theme-surface-stronger": !value,
             // On state - different colors
+            "border-theme-primary": value && color === "theme",
             "border-theme-blue": value && color === "blue",
             "border-theme-lavender": value && color === "lavender",
             "border-theme-green": value && color === "green",
@@ -69,21 +70,26 @@ export const Switch = ({
         )}
         style={{
           color: value
-            ? color === "blue"
-              ? "var(--theme-blue)"
-              : color === "lavender"
-                ? "var(--theme-lavender)"
-                : color === "green"
-                  ? "var(--theme-green)"
-                  : "var(--theme-red)"
+            ? color === "theme"
+              ? "var(--theme-primary)"
+              : color === "blue"
+                ? "var(--theme-blue)"
+                : color === "lavender"
+                  ? "var(--theme-lavender)"
+                  : color === "green"
+                    ? "var(--theme-green)"
+                    : "var(--theme-red)"
             : undefined,
         }}>
         <span
-          className={clsx("relative z-10 h-full w-5 rounded-full transition-all duration-300", {
-            "bg-theme-surface-stronger": !value,
-            "bg-current": value,
-            "translate-x-full": value,
-          })}
+          className={clsx(
+            "ease-snappy relative z-10 h-full w-5 transform-gpu rounded-full transition-transform duration-150",
+            {
+              "bg-theme-surface-stronger": !value,
+              "bg-current": value,
+              "translate-x-full": value,
+            }
+          )}
         />
       </div>
 

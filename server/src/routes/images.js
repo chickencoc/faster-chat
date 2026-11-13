@@ -1,21 +1,21 @@
 import { Hono } from "hono";
-import { randomUUID } from "crypto";
-import { writeFile, mkdir, readFile } from "fs/promises";
+import { readFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { generateText } from "ai";
 import {
   IMAGE_GENERATION,
-  IMAGE_MODELS,
   supportsImageToImage,
   REVERSE_PROMPT_LENGTHS,
+  OPENAI_IMAGE_COMPLEXITIES,
+  supportsOpenAIImageComplexity,
 } from "@faster-chat/shared";
 import { dbUtils } from "../lib/db.js";
 import { ensureSession } from "../middleware/auth.js";
 import { createRateLimiter } from "../middleware/rateLimiter.js";
 import { HTTP_STATUS } from "../lib/httpStatus.js";
 import { ENDPOINT_RATE_LIMITS } from "../lib/constants.js";
-import { createStoredFilename, calculateFileHash } from "../lib/fileUtils.js";
+import { ensureGeneratedDirectory, saveGeneratedImage } from "../lib/generatedImages.js";
 import { generateImageForProvider } from "../lib/imageProviderFactory.js";
 import { getModelInstance } from "../lib/providerFactory.js";
 import {
@@ -29,29 +29,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PROJECT_ROOT = path.resolve(__dirname, "../../..");
-const GENERATED_DIR = path.join(
-  PROJECT_ROOT,
-  "server/data/uploads",
-  IMAGE_GENERATION.GENERATED_DIR
-);
-
 const MAX_CONCURRENT_GENERATIONS = 3;
 
 export const imagesRouter = new Hono();
 
 // Apply auth middleware to all routes
 imagesRouter.use("/*", ensureSession);
-
-async function ensureGeneratedDirectory() {
-  try {
-    await mkdir(GENERATED_DIR, { recursive: true });
-  } catch (error) {
-    if (error.code !== "EEXIST") {
-      console.error("Failed to create generated directory:", error);
-      throw error;
-    }
-  }
-}
 
 function normalizeProviderError(error) {
   const message = (error?.message || "").toLowerCase();
@@ -86,71 +69,6 @@ function resolveVisionModel(modelId) {
   return { model: getModelInstance(modelRecord, decryptApiKey) };
 }
 
-async function saveGeneratedImage({
-  user,
-  buffer,
-  mimeType,
-  prompt,
-  model,
-  modelDisplayName,
-  aspectRatio,
-  source,
-  chatId,
-  referenceIds,
-}) {
-  const fileId = randomUUID();
-  const extension = mimeType === "image/webp" ? "webp" : mimeType.split("/")[1] || "png";
-  const filename = `generated_${Date.now()}.${extension}`;
-  const storedFilename = createStoredFilename(fileId, filename);
-  const filePath = path.join(GENERATED_DIR, storedFilename);
-
-  await writeFile(filePath, buffer);
-
-  const fileHash = calculateFileHash(buffer);
-  const relativePath = path.join(
-    "server/data/uploads",
-    IMAGE_GENERATION.GENERATED_DIR,
-    storedFilename
-  );
-
-  const fileRecord = dbUtils.createFile(
-    fileId,
-    user.id,
-    filename,
-    storedFilename,
-    relativePath,
-    mimeType,
-    buffer.length,
-    fileHash,
-    {
-      type: "generated",
-      prompt,
-      model,
-      modelDisplayName,
-      aspectRatio,
-      source,
-      generatedAt: Date.now(),
-      chatId: chatId || null,
-      references: referenceIds && referenceIds.length > 0 ? referenceIds : null,
-    }
-  );
-
-  if (!fileRecord) {
-    return null;
-  }
-
-  return {
-    id: fileId,
-    filename,
-    size: buffer.length,
-    mimeType,
-    model,
-    modelDisplayName,
-    prompt,
-    aspectRatio,
-  };
-}
-
 imagesRouter.post("/generate", createRateLimiter(ENDPOINT_RATE_LIMITS.IMAGE_GEN), async (c) => {
   const user = c.get("user");
   const body = await c.req.json();
@@ -161,6 +79,7 @@ imagesRouter.post("/generate", createRateLimiter(ENDPOINT_RATE_LIMITS.IMAGE_GEN)
     modelId,
     numImages = IMAGE_GENERATION.DEFAULT_NUM_IMAGES,
     referenceFileIds,
+    complexity,
   } = body;
 
   if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
@@ -181,29 +100,30 @@ imagesRouter.post("/generate", createRateLimiter(ENDPOINT_RATE_LIMITS.IMAGE_GEN)
     );
   }
 
-  let providerName = "replicate";
-  let apiKey = process.env.REPLICATE_API_KEY;
-  let modelIdentifier = IMAGE_MODELS.DEFAULT;
-  let modelDisplayName = IMAGE_MODELS.DISPLAY_NAME;
-  let baseUrl = null;
-  let model = null;
-
-  if (modelId) {
-    model = dbUtils.getEnabledModelWithProvider(modelId);
-    if (model) {
-      providerName = model.provider_name;
-      modelIdentifier = model.model_id;
-      modelDisplayName = model.display_name;
-      baseUrl = model.provider_base_url;
-      if (model.provider_encrypted_key) {
-        apiKey = decryptApiKey(
-          model.provider_encrypted_key,
-          model.provider_iv,
-          model.provider_auth_tag
-        );
-      }
-    }
+  const imageModels = modelId ? [] : dbUtils.getEnabledModelsByType("image");
+  const selectedModelId =
+    modelId || (imageModels.find((item) => item.is_default) || imageModels[0])?.model_id;
+  const model = selectedModelId ? dbUtils.getEnabledModelWithProvider(selectedModelId) : null;
+  if (!model || model.model_type !== "image") {
+    return c.json({ error: "No enabled image model found" }, HTTP_STATUS.BAD_REQUEST);
   }
+  const providerName = model.provider_name;
+  const modelIdentifier = model.model_id;
+  if (
+    complexity !== undefined &&
+    (!supportsOpenAIImageComplexity(providerName, modelIdentifier) ||
+      !OPENAI_IMAGE_COMPLEXITIES.includes(complexity))
+  ) {
+    return c.json(
+      { error: "Unsupported image complexity for this model" },
+      HTTP_STATUS.BAD_REQUEST
+    );
+  }
+  const modelDisplayName = model.display_name;
+  const baseUrl = model.provider_base_url;
+  const apiKey = model.provider_encrypted_key
+    ? decryptApiKey(model.provider_encrypted_key, model.provider_iv, model.provider_auth_tag)
+    : undefined;
 
   if (!apiKey && !baseUrl) {
     return c.json(
@@ -257,6 +177,10 @@ imagesRouter.post("/generate", createRateLimiter(ENDPOINT_RATE_LIMITS.IMAGE_GEN)
     }
   }
 
+  if (typeof chatId === "string") {
+    dbUtils.updateChatModelSettings(chatId, user.id, modelIdentifier, complexity, "image");
+  }
+
   const trimmedPrompt = prompt.trim();
   const tasks = Array.from({ length: numImages }, (_, index) => async () => {
     try {
@@ -268,6 +192,7 @@ imagesRouter.post("/generate", createRateLimiter(ENDPOINT_RATE_LIMITS.IMAGE_GEN)
           model: modelIdentifier,
           baseUrl,
           references,
+          complexity,
         }),
       };
     } catch (error) {
@@ -354,12 +279,12 @@ imagesRouter.post("/gallery/:fileId/favorite", async (c) => {
 });
 
 imagesRouter.get("/status", async (c) => {
-  const apiKey = process.env.REPLICATE_API_KEY;
-
+  const models = dbUtils.getEnabledModelsByType("image");
+  const model = models.find((item) => item.is_default) || models[0];
   return c.json({
-    available: !!apiKey,
-    model: IMAGE_MODELS.DEFAULT,
-    modelDisplayName: IMAGE_MODELS.DISPLAY_NAME,
+    available: !!model,
+    model: model?.model_id ?? null,
+    modelDisplayName: model?.display_name ?? null,
   });
 });
 

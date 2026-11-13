@@ -53,12 +53,7 @@ const ProviderBadge = ({ provider, showLabel = true, labelOverride }) => {
 
   // Determine label: "Native SDK" for official with .type, otherwise default
   const label =
-    labelOverride ??
-    (provider.id === "openrouter"
-      ? "OpenRouter API"
-      : badgeType === "official" && provider.type
-        ? "Native SDK"
-        : config.label);
+    labelOverride ?? (badgeType === "official" && provider.type ? "Native SDK" : config.label);
 
   return (
     <span
