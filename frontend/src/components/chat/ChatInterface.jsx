@@ -261,7 +261,7 @@ const ChatInterface = ({ chatId, chat }) => {
         <div
           ref={scrollContainerRef}
           style={{ scrollbarGutter: "stable both-edges" }}
-          className={`absolute inset-0 overflow-y-scroll pt-12 md:px-20 ${hasQuote ? "pb-[260px]" : "pb-[180px]"}`}>
+          className={`absolute inset-0 overflow-y-scroll pt-12 md:px-8 ${hasQuote ? "pb-[260px]" : "pb-[180px]"}`}>
           <div className="mx-auto mt-6 pt-3 max-w-4xl">
             <MessageList
               chatId={chatId}
@@ -269,7 +269,6 @@ const ChatInterface = ({ chatId, chat }) => {
               isLoading={isLoading}
               isGeneratingImage={isGenerating}
               status={status}
-              onStop={stop}
               onRegenerate={regenerate}
             />
           </div>
@@ -315,6 +314,7 @@ const ChatInterface = ({ chatId, chat }) => {
               input={input}
               handleInputChange={handleInputChange}
               handleSubmit={handleSubmit}
+              onStop={stop}
               onSetInput={setInput}
               voiceControls={voice}
               disabled={isLoading || isGenerating || !(imageMode ? imageModel : selectedModel)}

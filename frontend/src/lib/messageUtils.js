@@ -1,5 +1,3 @@
-import { MESSAGE_CONSTANTS } from "@faster-chat/shared";
-
 export function getMessageTimestamp(message, defaultValue = Date.now()) {
   return message.createdAt ?? message.created_at ?? defaultValue;
 }
@@ -41,25 +39,11 @@ export function hasTextContent(message) {
 
 export function deduplicateMessages(messages) {
   const seenIds = new Set();
-  const seenContentWindow = new Map();
 
   return messages.filter((msg) => {
-    const content = msg.parts?.map((p) => p.text).join("") || "";
-    const timestamp = getMessageTimestamp(msg);
-    const bucket = Math.floor(timestamp / MESSAGE_CONSTANTS.DEDUPLICATION_WINDOW_MS);
-    const contentKey = `${msg.role}:${content}:${bucket}`;
-
-    if (msg.id && seenIds.has(msg.id)) {
-      return false;
-    }
-    if (seenContentWindow.has(contentKey)) {
-      return false;
-    }
-
-    if (msg.id) {
-      seenIds.add(msg.id);
-    }
-    seenContentWindow.set(contentKey, true);
+    if (!msg.id) return true;
+    if (seenIds.has(msg.id)) return false;
+    seenIds.add(msg.id);
     return true;
   });
 }

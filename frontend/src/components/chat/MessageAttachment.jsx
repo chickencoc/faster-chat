@@ -1,12 +1,13 @@
 import { useState } from "preact/hooks";
 import { useQuery } from "@tanstack/react-query";
-import { Download, File, ScanText, Sparkles } from "lucide-preact";
+import { Download, File, Sparkles } from "lucide-preact";
 import { API_BASE, apiFetch } from "@/lib/api";
 import { useUiState } from "@/state/useUiState";
 import PromptToolsModal from "@/components/imagegen/PromptToolsModal";
+import ImagePreview from "./ImagePreview";
 
 export default function MessageAttachment({ fileId }) {
-  const [showPromptTools, setShowPromptTools] = useState(false);
+  const [view, setView] = useState(null);
   const setPendingPrompt = useUiState((state) => state.setPendingPrompt);
   const {
     data: fileMetadata,
@@ -18,10 +19,6 @@ export default function MessageAttachment({ fileId }) {
     staleTime: Infinity,
     gcTime: Infinity,
   });
-
-  const handleDownload = () => {
-    window.open(`${API_BASE}/api/files/${fileId}/content`, "_blank");
-  };
 
   if (isLoading) {
     return (
@@ -44,47 +41,44 @@ export default function MessageAttachment({ fileId }) {
   const isImage =
     fileMetadata.meta?.type !== "generated-document" && fileMetadata.mimeType?.startsWith("image/");
   const isGenerated = fileMetadata.meta?.type === "generated";
+  const url = `${API_BASE}/api/files/${fileId}/content`;
 
   // Render images inline
   if (isImage) {
     return (
-      <div className="group relative inline-block">
-        <img
-          src={`${API_BASE}/api/files/${fileId}/content`}
-          alt={fileMetadata.meta?.prompt || fileMetadata.filename}
-          className="max-h-96 max-w-full rounded-lg shadow-md"
-          loading="lazy"
-        />
-        {/* Overlay with download button and generated badge */}
-        <div className="absolute inset-0 flex items-start justify-between rounded-lg bg-black/0 p-2 opacity-0 transition-opacity group-hover:bg-black/20 group-hover:opacity-100">
+      <div className="relative inline-block max-w-full">
+        <button
+          type="button"
+          aria-label={`Preview image: ${fileMetadata.filename}`}
+          onClick={() => setView("preview")}
+          className="group relative block max-w-full cursor-zoom-in rounded-lg">
+          <img
+            src={url}
+            alt={fileMetadata.meta?.prompt || fileMetadata.filename}
+            className="max-h-96 max-w-full rounded-lg shadow-md"
+            loading="lazy"
+          />
           {isGenerated && (
-            <span className="bg-theme-pink/90 flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-white">
+            <span className="bg-theme-pink/90 absolute top-2 left-2 flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               <Sparkles size={12} />
               Generated
             </span>
           )}
-          <div className="ml-auto flex gap-2">
-            <button
-              type="button"
-              onClick={() => setShowPromptTools(true)}
-              className="rounded-full bg-white/90 p-2 text-gray-800 shadow-md transition-transform hover:scale-110"
-              title="Reverse prompt"
-              aria-label="Reverse prompt">
-              <ScanText size={16} />
-            </button>
-            <button
-              onClick={handleDownload}
-              className="rounded-full bg-white/90 p-2 text-gray-800 shadow-md transition-transform hover:scale-110"
-              title="Download image">
-              <Download size={16} />
-            </button>
-          </div>
-        </div>
-        {showPromptTools && (
+        </button>
+        {view === "preview" && (
+          <ImagePreview
+            url={url}
+            filename={fileMetadata.filename}
+            alt={fileMetadata.meta?.prompt || fileMetadata.filename}
+            onPrompt={() => setView("prompt")}
+            onClose={() => setView(null)}
+          />
+        )}
+        {view === "prompt" && (
           <PromptToolsModal
             fileId={fileId}
             onInsert={setPendingPrompt}
-            onClose={() => setShowPromptTools(false)}
+            onClose={() => setView(null)}
           />
         )}
       </div>
@@ -93,7 +87,7 @@ export default function MessageAttachment({ fileId }) {
 
   return (
     <a
-      href={`${API_BASE}/api/files/${fileId}/content`}
+      href={url}
       download={fileMetadata.filename}
       target="_blank"
       rel="noopener"

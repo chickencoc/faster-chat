@@ -7,7 +7,7 @@ import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import {
   AlertTriangle,
   Brain,
-  ChevronDown,
+  ChevronRight,
   Copy,
   FileCode,
   Globe,
@@ -68,7 +68,7 @@ const nativeTools = {
   },
 };
 
-const MessageItem = memo(({ message, isStreaming, onStop, onRegenerate }) => {
+const MessageItem = memo(({ message, isStreaming, onRegenerate }) => {
   const showTokenStats = useThemeStore((state) => state.showTokenStats);
   const isUser = message.role === "user";
   const rawContent = extractTextContent(message);
@@ -80,7 +80,7 @@ const MessageItem = memo(({ message, isStreaming, onStop, onRegenerate }) => {
   const tools = isStreaming
     ? (message.parts?.filter((part) => Object.hasOwn(nativeTools, part.type)) ?? [])
     : [];
-  const showActions = !isUser && (onStop || onRegenerate || (!isStreaming && content));
+  const showActions = !isUser && (onRegenerate || (!isStreaming && content));
   const hasAttachments = message.fileIds && message.fileIds.length > 0;
   const modelName = message.model;
   const hasThinking = thinking.length > 0;
@@ -106,14 +106,13 @@ const MessageItem = memo(({ message, isStreaming, onStop, onRegenerate }) => {
 
   return (
     <div className={`mb-8 flex w-full ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`flex max-w-[85%] min-w-0 gap-4 md:max-w-[85%] ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+      <div className={`flex min-w-0 gap-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
         {!isUser && <ModelAvatar modelId={modelName} />}
 
         <div
-          className={`relative min-w-0 overflow-hidden p-5 leading-relaxed transition-all duration-300 ease-in-out ${
+          className={`relative min-w-0 overflow-hidden p-3 leading-relaxed transition-all duration-300 ease-in-out ${
             isUser
-              ? "bg-theme-surface-stronger text-theme-text rounded-tl-lg rounded-br-lg rounded-bl-lg bg-gradient-to-br pt-5"
+              ? "bg-theme-surface-stronger text-theme-text rounded-tl-lg rounded-br-lg rounded-bl-lg bg-gradient-to-br"
               : "text-theme-text pt-0"
           } `}
           style={{ boxShadow: "var(--shadow-depth-sm)" }}>
@@ -146,7 +145,7 @@ const MessageItem = memo(({ message, isStreaming, onStop, onRegenerate }) => {
                   <summary className="text-theme-text-muted hover:text-theme-text flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium transition-colors select-none">
                     <Brain className="text-theme-mauve h-4 w-4 flex-shrink-0" />
                     <span>Reasoning</span>
-                    <ChevronDown className="ml-auto h-4 w-4 transform-gpu transition-transform group-open:rotate-180" />
+                    <ChevronRight className="h-4 w-4 shrink-0 transform-gpu transition-transform group-open:rotate-90" />
                   </summary>
                   <div className="text-theme-text-muted border-theme-border/50 border-t px-3 py-3 text-sm">
                     <MarkdownContent content={thinkContent} />
@@ -172,11 +171,22 @@ const MessageItem = memo(({ message, isStreaming, onStop, onRegenerate }) => {
 
           {!isUser && (summaries.length > 0 || tools.length > 0) && (
             <div className="text-theme-text-muted mb-4 space-y-2 text-sm">
-              {summaries.map((part, index) => (
-                <div key={index}>
-                  <MarkdownContent content={part.text} />
-                </div>
-              ))}
+              {summaries.map((part, index) => {
+                const heading = part.text.match(/^\s*\*\*(.+?)\*\*[ \t]*(?:\r?\n|$)/);
+                return (
+                  <details key={index} className="group">
+                    <summary className="text-theme-text flex cursor-pointer list-none items-center gap-2 font-semibold [&::-webkit-details-marker]:hidden">
+                      <span>{heading?.[1] ?? "Reasoning"}</span>
+                      <ChevronRight className="h-4 w-4 shrink-0 transform-gpu transition-transform duration-150 group-open:rotate-90" />
+                    </summary>
+                    <div className="mt-2">
+                      <MarkdownContent
+                        content={heading ? part.text.slice(heading[0].length).trim() : part.text}
+                      />
+                    </div>
+                  </details>
+                );
+              })}
               {tools.map((part) => {
                 const { Icon, label, done } = nativeTools[part.type];
                 return (
@@ -207,14 +217,6 @@ const MessageItem = memo(({ message, isStreaming, onStop, onRegenerate }) => {
 
           {showActions && (
             <div className="mt-4 flex justify-start gap-2">
-              {onStop && (
-                <button
-                  type="button"
-                  onClick={onStop}
-                  className="border-theme-border text-theme-red bg-theme-surface rounded-full border px-3 py-1 text-xs font-semibold shadow-sm transition-all duration-150 hover:brightness-110">
-                  Stop
-                </button>
-              )}
               {!isStreaming && content && (
                 <button
                   type="button"

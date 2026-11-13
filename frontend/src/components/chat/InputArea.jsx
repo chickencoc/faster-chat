@@ -9,6 +9,7 @@ import {
   Paperclip,
   Image,
   Send,
+  Square,
   Mic,
   MicOff,
   WandSparkles,
@@ -36,6 +37,7 @@ const InputArea = ({
   input,
   handleInputChange,
   handleSubmit,
+  onStop,
   disabled,
   voiceControls,
   onImageSubmit,
@@ -474,18 +476,29 @@ const InputArea = ({
 
           <div className="ml-auto flex min-w-0 items-center gap-2">
             {modelSelector}
-            <button
-              onClick={handleFormSubmit}
-              disabled={isSubmitDisabled}
-              type="button"
-              aria-label="Send message"
-              className={`rounded-xl p-2 transition-all duration-200 ${
-                isSubmitDisabled
-                  ? "bg-theme-surface-strong text-theme-muted cursor-not-allowed"
-                  : "bg-theme-primary hover:bg-theme-accent text-white shadow-sm hover:scale-105 active:scale-95"
-              }`}>
-              <Send size={18} />
-            </button>
+            {onStop ? (
+              <button
+                onClick={onStop}
+                type="button"
+                aria-label="Stop response"
+                title="Stop response"
+                className="bg-theme-primary hover:bg-theme-accent rounded-xl p-2 text-white shadow-sm transition-colors">
+                <Square size={18} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                onClick={handleFormSubmit}
+                disabled={isSubmitDisabled}
+                type="button"
+                aria-label="Send message"
+                className={`rounded-xl p-2 transition-all duration-200 ${
+                  isSubmitDisabled
+                    ? "bg-theme-surface-strong text-theme-muted cursor-not-allowed"
+                    : "bg-theme-primary hover:bg-theme-accent text-white shadow-sm hover:scale-105 active:scale-95"
+                }`}>
+                <Send size={18} />
+              </button>
+            )}
           </div>
         </div>
       </div>

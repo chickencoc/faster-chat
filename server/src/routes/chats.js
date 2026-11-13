@@ -561,6 +561,7 @@ chatsRouter.post(
       );
       const stream = await streamText({
         model: memoryModel,
+        abortSignal: c.req.raw.signal,
         messages,
         maxTokens: COMPLETION_CONSTANTS.MAX_TOKENS,
         providerOptions: {

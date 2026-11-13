@@ -1,39 +1,7 @@
 import MessageItem from "./MessageItem";
-import { getMessageTimestamp } from "@/lib/messageUtils";
-import { MESSAGE_CONSTANTS } from "@faster-chat/shared";
 import { ImageIcon } from "lucide-preact";
 import { useRef } from "preact/hooks";
 import MessageSelection from "./MessageSelection";
-
-function sortMessagesWithUserFirst(messages) {
-  return [...messages].sort((a, b) => {
-    const aTime = getMessageTimestamp(a, 0);
-    const bTime = getMessageTimestamp(b, 0);
-
-    if (
-      aTime > 0 &&
-      bTime > 0 &&
-      Math.abs(aTime - bTime) < MESSAGE_CONSTANTS.TIMESTAMP_SIMILARITY_MS
-    ) {
-      if (a.role === "user" && b.role === "assistant") {
-        return -1;
-      }
-      if (a.role === "assistant" && b.role === "user") {
-        return 1;
-      }
-    }
-
-    return aTime - bTime;
-  });
-}
-
-function getMessageActions(isActive, status, onStop, onRegenerate) {
-  const isStreaming = status === "streaming" || status === "submitted";
-  return {
-    stop: isActive && isStreaming && onStop ? onStop : undefined,
-    regenerate: isActive && !isStreaming && onRegenerate ? onRegenerate : undefined,
-  };
-}
 
 const ImageGeneratingSkeleton = () => (
   <div className="flex gap-3">
@@ -67,18 +35,10 @@ const EmptyState = () => (
   </div>
 );
 
-const MessageList = ({
-  chatId,
-  messages,
-  isLoading,
-  isGeneratingImage,
-  status,
-  onStop,
-  onRegenerate,
-}) => {
+const MessageList = ({ chatId, messages, isLoading, isGeneratingImage, status, onRegenerate }) => {
   const messageListRef = useRef(null);
-  const sortedMessages = sortMessagesWithUserFirst(messages);
-  const latest = sortedMessages.at(-1);
+  const latest = messages.at(-1);
+  const isStreaming = status === "streaming" || status === "submitted";
   const isEmpty = messages.length === 0 && !isLoading && !isGeneratingImage;
 
   if (isEmpty) {
@@ -87,17 +47,15 @@ const MessageList = ({
 
   return (
     <div ref={messageListRef} className="space-y-4" aria-live="polite">
-      {sortedMessages.map((message) => {
+      {messages.map((message) => {
         const isActiveAssistant = message.id === latest.id && message.role === "assistant";
-        const actions = getMessageActions(isActiveAssistant, status, onStop, onRegenerate);
 
         return (
           <MessageItem
             key={message.id}
             message={message}
-            isStreaming={isActiveAssistant && (status === "streaming" || status === "submitted")}
-            onStop={actions.stop}
-            onRegenerate={actions.regenerate}
+            isStreaming={isActiveAssistant && isStreaming}
+            onRegenerate={isActiveAssistant && !isStreaming ? onRegenerate : undefined}
           />
         );
       })}

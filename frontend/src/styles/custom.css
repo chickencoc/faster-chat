@@ -152,7 +152,7 @@
 
   .markdown-prose strong {
     font-weight: 600;
-    color: var(--theme-text);
+    /* color: var(--theme-text); */
   }
 
   .markdown-prose em {

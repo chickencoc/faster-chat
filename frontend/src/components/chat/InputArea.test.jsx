@@ -129,6 +129,14 @@ const defaultProps = {
 };
 
 describe("InputArea", () => {
+  test("stop replaces send and stays usable while the composer is disabled", () => {
+    const onStop = vi.fn();
+    render(<InputArea {...defaultProps} disabled onStop={onStop} />);
+    fireEvent.click(screen.getByRole("button", { name: "Stop response" }));
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Send message" })).toBeNull();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockDragActive = false;

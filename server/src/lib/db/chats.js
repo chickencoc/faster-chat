@@ -253,7 +253,7 @@ export function createChatUtils({ db }) {
       const stmt = db.prepare(`
       SELECT * FROM messages
       WHERE chat_id = ? AND user_id = ?
-      ORDER BY created_at ASC
+      ORDER BY created_at ASC, rowid ASC
       LIMIT ? OFFSET ?
     `);
       const messages = stmt.all(chatId, userId, limit, offset);

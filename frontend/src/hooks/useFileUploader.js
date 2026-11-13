@@ -11,11 +11,16 @@ async function uploadFile(file) {
     credentials: "include",
     body: formData,
   });
+  const data = await response.json().catch(() => null);
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Upload failed");
+    const fallback =
+      response.status === 413 ? "File exceeds the server upload limit" : "Upload failed";
+    throw new Error(data?.error || `${fallback} (HTTP ${response.status})`);
   }
-  return response.json();
+  if (!data?.id) {
+    throw new Error(`Invalid upload response (HTTP ${response.status})`);
+  }
+  return data;
 }
 
 export function useFileUploader({ onFilesUploaded } = {}) {

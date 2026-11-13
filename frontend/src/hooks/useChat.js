@@ -1,5 +1,5 @@
 import { extractTextContent } from "@/lib/messageUtils";
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { useChatPersistence } from "./useChatPersistence";
 import { useChatStream } from "./useChatStream";
 import { useDeleteMessageMutation } from "./useChatsQuery";
@@ -14,6 +14,8 @@ export function useChat({
 }) {
   const [input, setInput] = useState("");
   const [inputFiles, setInputFiles] = useState([]);
+  const [isStarting, setIsStarting] = useState(false);
+  const pendingSend = useRef(null);
   const deleteMessage = useDeleteMessageMutation();
 
   const {
@@ -51,8 +53,11 @@ export function useChat({
   async function submitMessage({ content, fileIds = [] }) {
     const trimmedContent = content.trim();
     if (!trimmedContent && fileIds.length === 0) return;
-    if (!chatId) return;
+    if (!chatId || pendingSend.current || stream.isStreaming || isSaving) return;
 
+    const pending = { cancelled: false };
+    pendingSend.current = pending;
+    setIsStarting(true);
     const messageId = crypto.randomUUID();
     const createdAt = Date.now();
     setInput("");
@@ -64,10 +69,25 @@ export function useChat({
         { id: messageId, content: trimmedContent, fileIds, createdAt, model },
         chatId
       );
-      await stream.send({ id: messageId, content: trimmedContent, fileIds, createdAt });
+      if (!pending.cancelled) {
+        const sending = stream.send({ id: messageId, content: trimmedContent, fileIds, createdAt });
+        setIsStarting(false);
+        await sending;
+      }
     } catch (err) {
       console.error("Failed to send message", err);
+    } finally {
+      pendingSend.current = null;
+      setIsStarting(false);
     }
+  }
+
+  function stop() {
+    if (pendingSend.current) {
+      pendingSend.current.cancelled = true;
+      setIsStarting(false);
+    }
+    return stream.stop();
   }
 
   function handleSubmit(e, content = input) {
@@ -79,7 +99,7 @@ export function useChat({
     setInput(e.target.value);
   }
 
-  const isLoading = (chatId && isChatLoading) || isSaving || stream.isStreaming;
+  const isLoading = (chatId && isChatLoading) || isSaving || isStarting || stream.isStreaming;
 
   const appendFiles = (files) => setInputFiles((prev) => [...prev, ...files]);
   const removeFile = (fileId) => setInputFiles((prev) => prev.filter((f) => f.id !== fileId));
@@ -101,7 +121,7 @@ export function useChat({
     error: stream.error,
     clearError: stream.clearError,
     currentChat: chat,
-    stop: stream.stop,
+    stop: isStarting || stream.isStreaming ? stop : undefined,
     regenerate: stream.isStreaming ? undefined : stream.regenerate,
     status: stream.status,
   };

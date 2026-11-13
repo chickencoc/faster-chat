@@ -29,10 +29,6 @@ export const PROVIDER_DEFAULTS = {
 export const MESSAGE_CONSTANTS = {
   /** Maximum messages to keep in history for context */
   MAX_HISTORY: 64,
-  /** Time window for message deduplication (in milliseconds) */
-  DEDUPLICATION_WINDOW_MS: 5000,
-  /** Threshold for considering messages "similar" in timestamp sorting */
-  TIMESTAMP_SIMILARITY_MS: 5000,
 };
 
 /** AI Completion Constants */
